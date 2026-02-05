@@ -39,7 +39,7 @@ export default class Registration extends Component {
   event.preventDefault();
 
   api
-    .post(`${API_BASE}/registrations`, {
+    .post(`/registrations`, {
       user: {
         first_name: this.state.first_name.trim(),
         last_name: this.state.last_name.trim(),
@@ -54,6 +54,8 @@ export default class Registration extends Component {
 
       if (user && token) {
         localStorage.setItem("authToken", token);
+        console.log("saved token?", localStorage.getItem("authToken"));
+        console.log("API_BASE:", process.env.REACT_APP_API_BASE_URL);
         this.setState({ registrationErrors: [] });
         this.props.handleSuccessfulAuth({ user, token });
         return;
