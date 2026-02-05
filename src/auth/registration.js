@@ -6,6 +6,8 @@ import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
 import Alert from "react-bootstrap/Alert";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 const SectionKicker = ({ children }) => (
   <div
     className="text-uppercase text-muted"
@@ -38,7 +40,7 @@ export default class Registration extends Component {
 
     axios
       .post(
-        "http://localhost:3000/registrations",
+        `${API_BASE}/registrations`,
         {
           user: {
             first_name: this.state.first_name.trim(),

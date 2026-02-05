@@ -1,6 +1,8 @@
 import React, { Component } from "react";
 import axios from "axios";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 export default class Login extends Component {
   constructor(props) {
     super(props);
@@ -23,7 +25,7 @@ export default class Login extends Component {
 
   axios
     .post(
-      "http://localhost:3000/sessions",
+      `${API_BASE}/sessions`,
       { user: { email, password } },
       { withCredentials: true }
     )
