@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "react-bootstrap/Card";
 import Form from "react-bootstrap/Form";
@@ -43,7 +43,7 @@ class RosterForm extends Component {
     const { id } = this.props.params;
     this.setState({ loading: true, error: null });
 
-    axios
+    api
       .get(`${API_BASE}/rosters/${id}`, { withCredentials: true })
       .then((res) => {
         this.setState({
@@ -60,7 +60,7 @@ class RosterForm extends Component {
         this.setState({ error: msg, loading: false });
       });
      
-      axios
+      api
   .get(`${API_BASE}/students`, { withCredentials: true })
   .then((res) => this.setState({ allStudents: res.data || [] }))
   .catch(() => {});
@@ -105,8 +105,8 @@ removeStudent = (id) => {
   };
 
   const req = id
-    ? axios.patch(`${API_BASE}/rosters/${id}`, payload, { withCredentials: true })
-    : axios.post(`${API_BASE}/rosters`, payload, { withCredentials: true });
+    ? api.patch(`${API_BASE}/rosters/${id}`, payload, { withCredentials: true })
+    : api.post(`${API_BASE}/rosters`, payload, { withCredentials: true });
 
   req
     .then((res) => {

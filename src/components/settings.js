@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../api";
 import { useNavigate } from "react-router-dom";
 import DangerZone from "./DangerZone";
 import Button from "react-bootstrap/Button";
@@ -45,7 +45,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
     setMessage("");
     setErrors([]);
 
-    axios
+    api
       .patch(
         `${API_BASE}/password`,
         {
@@ -74,7 +74,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
     setMessage("");
     setErrors([]);
 
-    axios
+    api
       .patch(
         `${API_BASE}/profile`,
         {

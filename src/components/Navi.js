@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import api from "../api";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 
 import {
@@ -66,7 +66,7 @@ export const Navi = ({ handleLogout, currentUser }) => {
   const handleLogoutClick = async (e) => {
     e?.preventDefault?.();
     try {
-      await axios.delete(`${API_BASE}/logout`, { withCredentials: true });
+      await api.delete(`${API_BASE}/logout`, { withCredentials: true });
     } catch (error) {
       console.error("Logout failed", error);
     } finally {

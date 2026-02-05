@@ -1,6 +1,6 @@
 // src/components/StudentsIndex.js
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import { Link } from "react-router-dom";
 
 import Card from "react-bootstrap/Card";
@@ -124,7 +124,7 @@ export default function StudentsIndex({ currentUser }) {
     setLoading(true);
     setError(null);
 
-    axios
+    api
       .get(`${API_BASE}/students`, { withCredentials: true })
       .then((res) => {
         setStudents(Array.isArray(res.data) ? res.data : res.data || []);

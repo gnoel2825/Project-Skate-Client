@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { Link } from "react-router-dom";
 import Card from "react-bootstrap/Card";
 import Form from "react-bootstrap/Form";
@@ -38,7 +38,7 @@ export default class Registration extends Component {
  handleSubmit(event) {
   event.preventDefault();
 
-  axios
+  api
     .post(`${API_BASE}/registrations`, {
       user: {
         first_name: this.state.first_name.trim(),

@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
 import Alert from "react-bootstrap/Alert";
@@ -90,7 +90,7 @@ class CreateLessonPlan extends Component {
   fetchSkills = () => {
     this.setState({ loadingSkills: true, errors: [], success: null });
 
-    axios
+    api
       .get(`${API_BASE}/skills`, { withCredentials: true })
       .then((res) => this.setState({ skills: res.data || [], loadingSkills: false }))
       .catch((err) =>
@@ -152,7 +152,7 @@ class CreateLessonPlan extends Component {
 
     try {
       // 1) Create plan (includes notes)
-      const lpRes = await axios.post(
+      const lpRes = await api.post(
         `${API_BASE}/lesson_plans`,
         {
           lesson_plan: {
@@ -175,7 +175,7 @@ class CreateLessonPlan extends Component {
         cooldown_skill_ids: Array.from(this.state.cooldownSkillIds),
       };
 
-      await axios.post(
+      await api.post(
         `${API_BASE}/lesson_plans/${lessonPlanId}/add_skills`,
         payloadV2,
         { withCredentials: true }
@@ -199,7 +199,7 @@ class CreateLessonPlan extends Component {
             ])
           );
 
-          await axios.post(
+          await api.post(
             `${API_BASE}/lesson_plans/${lessonPlanId}/add_skills`,
             { skill_ids: legacy },
             { withCredentials: true }

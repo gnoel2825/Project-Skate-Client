@@ -1,6 +1,6 @@
 // src/components/LessonPlanShow.js
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import Card from "react-bootstrap/Card";
@@ -211,11 +211,11 @@ weeklyOverviewError: null,
     this.setState({ loading: true, error: null, success: null });
 
     Promise.all([
-      axios.get(`${API_BASE}/lesson_plans/${id}`, {
+      api.get(`${API_BASE}/lesson_plans/${id}`, {
         withCredentials: true,
         params: lpParams,
       }),
-      axios.get(`${API_BASE}/skills`, { withCredentials: true }),
+      api.get(`${API_BASE}/skills`, { withCredentials: true }),
     ])
       .then(([lpRes, skillsRes]) => {
         const lp = lpRes.data;
@@ -302,7 +302,7 @@ cancelEdit = () => {
 
   this.setState({ saving: true, error: null, success: null });
 
-  axios
+  api
     .patch(`${API_BASE}/lesson_plans/${id}`, payload, { withCredentials: true })
     .then((res) => {
       // ✅ support both shapes:
@@ -341,7 +341,7 @@ cancelEdit = () => {
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .delete(`${API_BASE}/lesson_plans/${id}/remove_skill/${skillId}`, {
         withCredentials: true,
         params: { role },
@@ -372,7 +372,7 @@ cancelEdit = () => {
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .post(
         `${API_BASE}/lesson_plans/${id}/add_skills`,
         { skill_ids: skillIds, role },
@@ -403,7 +403,7 @@ cancelEdit = () => {
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .post(
         `${API_BASE}/lesson_plans/${id}/lesson_plan_occurrences`,
         {
@@ -440,7 +440,7 @@ cancelEdit = () => {
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .delete(`${API_BASE}/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`, {
         withCredentials: true,
       })
@@ -465,7 +465,7 @@ cancelEdit = () => {
 
     this.setState({ saving: true, error: null });
 
-    axios
+    api
       .delete(`${API_BASE}/lesson_plans/${id}`, { withCredentials: true })
       .then(() => {
         this.props.navigate("/lesson-plans");
@@ -649,10 +649,10 @@ loadWeeklyOverview = async () => {
     let rostersRes = null;
 
     try {
-      rostersRes = await axios.get(`${API_BASE}/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`${API_BASE}/rosters`, { withCredentials: true });
     } catch (e1) {
       // fallback if your app uses a different route name
-      rostersRes = await axios.get(`${API_BASE}/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`${API_BASE}/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -661,7 +661,7 @@ loadWeeklyOverview = async () => {
     const scheduleRequests = (rosters || [])
       .filter((r) => r?.id != null)
       .map((r) =>
-        axios
+        api
           .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
