@@ -160,7 +160,7 @@ export default function MyStudentsCard({
     setError(null);
 
     api
-      .get(endpoint, { withCredentials: true })
+      .get(endpoint)
       .then((res) => setStudents(Array.isArray(res.data) ? res.data : []))
       .catch((err) => {
         const msg =

@@ -126,7 +126,7 @@ export default function MyLessonPlans() {
     const params = rosterId ? { scope: "all" } : undefined;
 
     api
-      .get(url, { withCredentials: true, params })
+      .get(url, { params })
       .then((res) => {
         const data = res.data;
 

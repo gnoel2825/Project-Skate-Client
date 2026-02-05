@@ -50,7 +50,7 @@ export default class App extends Component {
 
   checkLoginStatus() {
   api
-    .get(`${API_BASE}/logged_in`, { withCredentials: true })
+    .get(`${API_BASE}/logged_in`)
     .then((response) => {
       const nextStatus = response.data.logged_in ? "LOGGED_IN" : "NOT_LOGGED_IN";
       const nextUser = response.data.user || null;

@@ -54,8 +54,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
             password: password,
             password_confirmation: passwordConfirmation,
           },
-        },
-        { withCredentials: true }
+        }
       )
       .then(() => {
         setMessage("Password updated successfully.");
@@ -83,8 +82,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
             last_name: lastName.trim(),
             email: email.trim().toLowerCase(),
           },
-        },
-        { withCredentials: true }
+        }
       )
       .then((res) => {
         setMessage("Profile updated successfully.");

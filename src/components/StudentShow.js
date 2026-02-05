@@ -227,7 +227,7 @@ class StudentShow extends Component {
     this.setState({ loading: true, error: null, success: null });
 
     api
-      .get(`/students/${id}`, { withCredentials: true })
+      .get(`/students/${id}`)
       .then((res) => {
         const s = res.data;
         this.setState({
@@ -285,8 +285,7 @@ class StudentShow extends Component {
             birthday: (birthday || "").trim() || null,
             notes: (notes || "").trim() || null
           }
-        },
-        { withCredentials: true }
+        }
       )
       .then((res) => {
         this.setState({
@@ -313,7 +312,7 @@ class StudentShow extends Component {
     this.setState({ deleting: true, error: null, success: null });
 
     api
-      .delete(`/students/${id}`, { withCredentials: true })
+      .delete(`/students/${id}`)
       .then(() => this.props.navigate("/students"))
       .catch((err) => {
         const msg =
@@ -411,7 +410,8 @@ class StudentShow extends Component {
 
           <div className="d-flex flex-column flex-sm-row gap-2">
             {!isEditing ? (
-              <Button variant="outline-primary" onClick={this.startEdit} className="w-100 w-sm-auto">
+              <Button variant="outline-primary" onClick={this.startEdit} size="sm"
+                className="rounded-pill px-3">
                 Edit
               </Button>
             ) : (
@@ -420,7 +420,8 @@ class StudentShow extends Component {
                   variant="primary"
                   onClick={this.saveStudent}
                   disabled={saving}
-                  className="w-100 w-sm-auto"
+                  size="sm"
+                className="rounded-pill px-3"
                 >
                   {saving ? "Saving..." : "Save"}
                 </Button>

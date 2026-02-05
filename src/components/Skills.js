@@ -16,7 +16,7 @@ export default class Skills extends Component {
 
   componentDidMount() {
     api
-      .get(`/skills`, { withCredentials: true })
+      .get(`/skills`)
       .then((res) => {
         this.setState({ skills: res.data, loading: false });
       })

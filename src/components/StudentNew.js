@@ -53,8 +53,7 @@ class StudentNew extends Component {
             birthday: birthday || null,
             notes: (notes || "").trim() || null
           }
-        },
-        { withCredentials: true }
+        }
       )
       .then((res) => {
         const newStudent = res.data;
@@ -78,7 +77,7 @@ class StudentNew extends Component {
       <div className="container mt-4" style={{ maxWidth: 900 }}>
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h1 className="mb-0">Add Student</h1>
-          <Button variant="outline-secondary" onClick={() => this.props.navigate(-1)}>
+          <Button variant="outline-secondary" className="" style={{ fontSize: 12}} onClick={() => this.props.navigate(-1)}>
             Back
           </Button>
         </div>
@@ -149,11 +148,14 @@ class StudentNew extends Component {
               </Row>
 
               <div className="d-flex gap-2 mt-3">
-                <Button type="submit" variant="primary" disabled={saving}>
+                <Button type="submit" style={{ fontSize: 12}} size="sm"
+                className="rounded-pill px-3" variant="primary" disabled={saving}>
                   {saving ? "Saving..." : "Create student"}
                 </Button>
                 <Button
                   type="button"
+                  size="sm"
+                className="rounded-pill px-3"
                   variant="outline-secondary"
                   disabled={saving}
                   onClick={() =>
