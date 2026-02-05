@@ -25,7 +25,7 @@ export default class Login extends Component {
 
   api
     .post(
-      `${API_BASE}/sessions`,
+      `/sessions`,
       { user: { email, password } })
     .then((response) => {
   console.log("LOGIN THEN", response.status, response.data);
@@ -34,6 +34,9 @@ export default class Login extends Component {
 
   if (token && user) {
     localStorage.setItem("authToken", token);
+    console.log("BUILD VERSION:", "2026-02-05-22:15");
+    console.log("saved token?", localStorage.getItem("authToken"));
+    console.log("API_BASE:", process.env.REACT_APP_API_BASE_URL);
     this.setState({ loginErrors: "" });
     this.props.handleSuccessfulAuth({ user, token });
     return;
