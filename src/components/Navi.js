@@ -66,7 +66,7 @@ export const Navi = ({ handleLogout, currentUser }) => {
   const handleLogoutClick = async (e) => {
     e?.preventDefault?.();
     try {
-      await api.delete(`${API_BASE}/logout`, { withCredentials: true });
+      await api.delete(`/logout`, { withCredentials: true });
     } catch (error) {
       console.error("Logout failed", error);
     } finally {

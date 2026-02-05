@@ -47,7 +47,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
 
     api
       .patch(
-        `${API_BASE}/password`,
+        `/password`,
         {
           user: {
             current_password: currentPassword,
@@ -76,7 +76,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
 
     api
       .patch(
-        `${API_BASE}/profile`,
+        `/profile`,
         {
           user: {
             first_name: firstName.trim(),

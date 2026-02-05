@@ -273,7 +273,7 @@ weeklyOverviewError: null,
     this.setState({ weeklyLoading: true, weeklyError: null });
 
     api
-      .get(`${API_BASE}/rosters/${id}/roster_schedules`, { withCredentials: true })
+      .get(`/rosters/${id}/roster_schedules`, { withCredentials: true })
       .then((res) => {
         const weeklySchedules = res.data || [];
 
@@ -286,7 +286,7 @@ weeklyOverviewError: null,
           },
           () => {
             api
-              .get(`${API_BASE}/rosters/${id}/lesson_plans_matching_schedule?scope=all`, {
+              .get(`/rosters/${id}/lesson_plans_matching_schedule?scope=all`, {
                 withCredentials: true
               })
               .then((lpRes) =>
@@ -327,9 +327,9 @@ weeklyOverviewError: null,
     });
 
     Promise.all([
-      api.get(`${API_BASE}/rosters/${id}`, { withCredentials: true }),
-      api.get(`${API_BASE}/students/all`, { withCredentials: true }),
-      api.get(`${API_BASE}/users?role=teacher`, { withCredentials: true })
+      api.get(`/rosters/${id}`, { withCredentials: true }),
+      api.get(`/students/all`, { withCredentials: true }),
+      api.get(`/users?role=teacher`, { withCredentials: true })
     ])
       .then(([rosterRes, studentsRes, teachersRes]) => {
         const teachersData = teachersRes.data;
@@ -386,9 +386,9 @@ weeklyOverviewError: null,
     let rostersRes = null;
 
     try {
-      rostersRes = await api.get(`${API_BASE}/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters`, { withCredentials: true });
     } catch (e1) {
-      rostersRes = await api.get(`${API_BASE}/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -398,7 +398,7 @@ weeklyOverviewError: null,
       .filter((r) => r?.id != null)
       .map((r) =>
         api
-          .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );
@@ -450,7 +450,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .post(`${API_BASE}/rosters/${id}/add_student/${studentId}`, null, {
+      .post(`/rosters/${id}/add_student/${studentId}`, null, {
         withCredentials: true
       })
       .then((res) => {
@@ -476,7 +476,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`${API_BASE}/rosters/${id}/remove_student/${studentId}`, {
+      .delete(`/rosters/${id}/remove_student/${studentId}`, {
         withCredentials: true
       })
       .then((res) => {
@@ -499,7 +499,7 @@ weeklyOverviewError: null,
     this.setState({ teacherSaving: true, teacherError: null, teacherSuccess: null });
 
     api
-      .post(`${API_BASE}/rosters/${id}/add_teacher/${teacherId}`, null, {
+      .post(`/rosters/${id}/add_teacher/${teacherId}`, null, {
         withCredentials: true
       })
       .then((res) => {
@@ -526,7 +526,7 @@ weeklyOverviewError: null,
     this.setState({ teacherSaving: true, teacherError: null, teacherSuccess: null });
 
     api
-      .delete(`${API_BASE}/rosters/${id}/remove_teacher/${teacherId}`, {
+      .delete(`/rosters/${id}/remove_teacher/${teacherId}`, {
         withCredentials: true
       })
       .then((res) => {
@@ -557,7 +557,7 @@ weeklyOverviewError: null,
   this.setState({ lessonPlanDeletingOccId: occId, lessonPlansError: null, success: null });
 
   api
-    .delete(`${API_BASE}/lesson_plans/${lpId}/lesson_plan_occurrences/${occId}`, {
+    .delete(`/lesson_plans/${lpId}/lesson_plan_occurrences/${occId}`, {
       withCredentials: true
     })
     .then(() => {
@@ -597,7 +597,7 @@ weeklyOverviewError: null,
 
     api
       .post(
-        `${API_BASE}/rosters/${id}/roster_meetings`,
+        `/rosters/${id}/roster_meetings`,
         {
           roster_meeting: {
             taught_on,
@@ -637,7 +637,7 @@ weeklyOverviewError: null,
     this.setState({ meetingDeletingId: meetingId, meetingError: null, meetingSuccess: null });
 
     api
-      .delete(`${API_BASE}/rosters/${id}/roster_meetings/${meetingId}`, {
+      .delete(`/rosters/${id}/roster_meetings/${meetingId}`, {
         withCredentials: true
       })
       .then(() => {
@@ -670,7 +670,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, weeklyError: null });
 
     api
-      .post(`${API_BASE}/rosters/${id}/roster_schedules`, payload, { withCredentials: true })
+      .post(`/rosters/${id}/roster_schedules`, payload, { withCredentials: true })
       .then(() => {
         this.setState({
           saving: false,
@@ -696,7 +696,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, weeklyError: null });
 
     api
-      .delete(`${API_BASE}/rosters/${id}/roster_schedules/${scheduleId}`, {
+      .delete(`/rosters/${id}/roster_schedules/${scheduleId}`, {
         withCredentials: true
       })
       .then(() => {
@@ -720,7 +720,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`${API_BASE}/rosters/${id}`, { withCredentials: true })
+      .delete(`/rosters/${id}`, { withCredentials: true })
       .then(() => this.props.navigate("/rosters"))
       .catch((err) => {
         const msg =
@@ -738,7 +738,7 @@ weeklyOverviewError: null,
     this.setState({ meetingsLoading: true, meetingsError: null });
 
     api
-      .get(`${API_BASE}/rosters/${id}/scheduled_lessons`, { withCredentials: true })
+      .get(`/rosters/${id}/scheduled_lessons`, { withCredentials: true })
       .then((res) => {
         this.setState({ meetingsMatches: res.data?.matches || [], meetingsLoading: false });
       })
@@ -838,7 +838,7 @@ saveTitle = () => {
 
   api
     .patch(
-      `${API_BASE}/rosters/${id}`,
+      `/rosters/${id}`,
       { roster: { name } },
       { withCredentials: true }
     )

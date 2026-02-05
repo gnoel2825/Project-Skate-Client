@@ -91,7 +91,7 @@ class CreateLessonPlan extends Component {
     this.setState({ loadingSkills: true, errors: [], success: null });
 
     api
-      .get(`${API_BASE}/skills`, { withCredentials: true })
+      .get(`/skills`, { withCredentials: true })
       .then((res) => this.setState({ skills: res.data || [], loadingSkills: false }))
       .catch((err) =>
         this.setState({
@@ -153,7 +153,7 @@ class CreateLessonPlan extends Component {
     try {
       // 1) Create plan (includes notes)
       const lpRes = await api.post(
-        `${API_BASE}/lesson_plans`,
+        `/lesson_plans`,
         {
           lesson_plan: {
             title,
@@ -176,7 +176,7 @@ class CreateLessonPlan extends Component {
       };
 
       await api.post(
-        `${API_BASE}/lesson_plans/${lessonPlanId}/add_skills`,
+        `/lesson_plans/${lessonPlanId}/add_skills`,
         payloadV2,
         { withCredentials: true }
       );
@@ -200,7 +200,7 @@ class CreateLessonPlan extends Component {
           );
 
           await api.post(
-            `${API_BASE}/lesson_plans/${lessonPlanId}/add_skills`,
+            `/lesson_plans/${lessonPlanId}/add_skills`,
             { skill_ids: legacy },
             { withCredentials: true }
           );

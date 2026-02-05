@@ -173,7 +173,7 @@ export default function RostersIndex({ currentUser }) {
     setError(null);
 
     api
-      .get(`${API_BASE}/rosters.json`, { withCredentials: true })
+      .get(`/rosters.json`, { withCredentials: true })
       .then((res) => {
         setRosters(Array.isArray(res.data) ? res.data : []);
         setLoading(false);
