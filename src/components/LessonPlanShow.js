@@ -212,10 +212,9 @@ weeklyOverviewError: null,
 
     Promise.all([
       api.get(`/lesson_plans/${id}`, {
-        withCredentials: true,
         params: lpParams,
       }),
-      api.get(`/skills`, { withCredentials: true }),
+      api.get(`/skills`),
     ])
       .then(([lpRes, skillsRes]) => {
         const lp = lpRes.data;
@@ -303,7 +302,7 @@ cancelEdit = () => {
   this.setState({ saving: true, error: null, success: null });
 
   api
-    .patch(`/lesson_plans/${id}`, payload, { withCredentials: true })
+    .patch(`/lesson_plans/${id}`, payload)
     .then((res) => {
       // ✅ support both shapes:
       //   render json: lesson_plan
@@ -343,7 +342,6 @@ cancelEdit = () => {
 
     api
       .delete(`/lesson_plans/${id}/remove_skill/${skillId}`, {
-        withCredentials: true,
         params: { role },
       })
       .then(() => this.loadPage())
@@ -376,7 +374,6 @@ cancelEdit = () => {
       .post(
         `/lesson_plans/${id}/add_skills`,
         { skill_ids: skillIds, role },
-        { withCredentials: true }
       )
       .then(() => {
         this.setState((prev) => ({
@@ -414,7 +411,6 @@ cancelEdit = () => {
             location: newLocation.trim() || null,
           },
         },
-        { withCredentials: true }
       )
       .then(() => {
         this.setState({
@@ -441,9 +437,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`, {
-        withCredentials: true,
-      })
+      .delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`)
       .then(() => {
         this.setState({
           saving: false,
@@ -466,7 +460,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null });
 
     api
-      .delete(`/lesson_plans/${id}`, { withCredentials: true })
+      .delete(`/lesson_plans/${id}`)
       .then(() => {
         this.props.navigate("/lesson-plans");
       })
@@ -649,10 +643,10 @@ loadWeeklyOverview = async () => {
     let rostersRes = null;
 
     try {
-      rostersRes = await api.get(`/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters`);
     } catch (e1) {
       // fallback if your app uses a different route name
-      rostersRes = await api.get(`/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters/all`);
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -662,7 +656,7 @@ loadWeeklyOverview = async () => {
       .filter((r) => r?.id != null)
       .map((r) =>
         api
-          .get(`/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`/rosters/${r.id}/roster_schedules`})
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );

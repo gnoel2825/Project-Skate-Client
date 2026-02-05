@@ -125,7 +125,7 @@ export default function StudentsIndex({ currentUser }) {
     setError(null);
 
     api
-      .get(`/students`, { withCredentials: true })
+      .get(`/students`)
       .then((res) => {
         setStudents(Array.isArray(res.data) ? res.data : res.data || []);
         setLoading(false);

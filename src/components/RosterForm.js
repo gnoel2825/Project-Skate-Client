@@ -44,7 +44,7 @@ class RosterForm extends Component {
     this.setState({ loading: true, error: null });
 
     api
-      .get(`/rosters/${id}`, { withCredentials: true })
+      .get(`/rosters/${id}`)
       .then((res) => {
         this.setState({
           name: res.data?.name || "",
@@ -61,7 +61,7 @@ class RosterForm extends Component {
       });
      
       api
-  .get(`/students`, { withCredentials: true })
+  .get(`/students`)
   .then((res) => this.setState({ allStudents: res.data || [] }))
   .catch(() => {});
 
@@ -105,8 +105,8 @@ removeStudent = (id) => {
   };
 
   const req = id
-    ? api.patch(`/rosters/${id}`, payload, { withCredentials: true })
-    : api.post(`/rosters`, payload, { withCredentials: true });
+    ? api.patch(`/rosters/${id}`, payload)
+    : api.post(`/rosters`, payload);
 
   req
     .then((res) => {

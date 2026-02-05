@@ -91,7 +91,7 @@ class CreateLessonPlan extends Component {
     this.setState({ loadingSkills: true, errors: [], success: null });
 
     api
-      .get(`/skills`, { withCredentials: true })
+      .get(`/skills`)
       .then((res) => this.setState({ skills: res.data || [], loadingSkills: false }))
       .catch((err) =>
         this.setState({
@@ -162,8 +162,7 @@ class CreateLessonPlan extends Component {
             main_notes: this.state.mainNotes,
             cooldown_notes: this.state.cooldownNotes,
           },
-        },
-        { withCredentials: true }
+        }
       );
 
       lessonPlanId = lpRes.data?.id;
@@ -178,7 +177,6 @@ class CreateLessonPlan extends Component {
       await api.post(
         `/lesson_plans/${lessonPlanId}/add_skills`,
         payloadV2,
-        { withCredentials: true }
       );
 
       // 3) Navigate
@@ -201,8 +199,7 @@ class CreateLessonPlan extends Component {
 
           await api.post(
             `/lesson_plans/${lessonPlanId}/add_skills`,
-            { skill_ids: legacy },
-            { withCredentials: true }
+            { skill_ids: legacy }
           );
 
           this.setState({ submitting: false });

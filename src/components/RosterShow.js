@@ -273,7 +273,7 @@ weeklyOverviewError: null,
     this.setState({ weeklyLoading: true, weeklyError: null });
 
     api
-      .get(`/rosters/${id}/roster_schedules`, { withCredentials: true })
+      .get(`/rosters/${id}/roster_schedules`)
       .then((res) => {
         const weeklySchedules = res.data || [];
 
@@ -286,9 +286,7 @@ weeklyOverviewError: null,
           },
           () => {
             api
-              .get(`/rosters/${id}/lesson_plans_matching_schedule?scope=all`, {
-                withCredentials: true
-              })
+              .get(`/rosters/${id}/lesson_plans_matching_schedule?scope=all`)
               .then((lpRes) =>
                 this.setState({
                   lessonPlansInWeek: lpRes.data || [],
@@ -327,9 +325,9 @@ weeklyOverviewError: null,
     });
 
     Promise.all([
-      api.get(`/rosters/${id}`, { withCredentials: true }),
-      api.get(`/students/all`, { withCredentials: true }),
-      api.get(`/users?role=teacher`, { withCredentials: true })
+      api.get(`/rosters/${id}`),
+      api.get(`/students/all`),
+      api.get(`/users?role=teacher`)
     ])
       .then(([rosterRes, studentsRes, teachersRes]) => {
         const teachersData = teachersRes.data;
@@ -386,9 +384,9 @@ weeklyOverviewError: null,
     let rostersRes = null;
 
     try {
-      rostersRes = await api.get(`/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters`);
     } catch (e1) {
-      rostersRes = await api.get(`/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters/all`);
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -398,7 +396,7 @@ weeklyOverviewError: null,
       .filter((r) => r?.id != null)
       .map((r) =>
         api
-          .get(`/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`/rosters/${r.id}/roster_schedules`)
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );
@@ -450,9 +448,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .post(`/rosters/${id}/add_student/${studentId}`, null, {
-        withCredentials: true
-      })
+      .post(`/rosters/${id}/add_student/${studentId}`, null)
       .then((res) => {
         this.setState({
           roster: res.data,
@@ -476,9 +472,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`/rosters/${id}/remove_student/${studentId}`, {
-        withCredentials: true
-      })
+      .delete(`/rosters/${id}/remove_student/${studentId}`)
       .then((res) => {
         this.setState({ roster: res.data, saving: false, success: "Student removed." });
       })
@@ -499,9 +493,7 @@ weeklyOverviewError: null,
     this.setState({ teacherSaving: true, teacherError: null, teacherSuccess: null });
 
     api
-      .post(`/rosters/${id}/add_teacher/${teacherId}`, null, {
-        withCredentials: true
-      })
+      .post(`/rosters/${id}/add_teacher/${teacherId}`, null)
       .then((res) => {
         this.setState((prev) => ({
           roster: { ...prev.roster, ...res.data },
@@ -526,9 +518,7 @@ weeklyOverviewError: null,
     this.setState({ teacherSaving: true, teacherError: null, teacherSuccess: null });
 
     api
-      .delete(`/rosters/${id}/remove_teacher/${teacherId}`, {
-        withCredentials: true
-      })
+      .delete(`/rosters/${id}/remove_teacher/${teacherId}`)
       .then((res) => {
         this.setState((prev) => ({
           roster: { ...prev.roster, ...res.data },
@@ -557,9 +547,7 @@ weeklyOverviewError: null,
   this.setState({ lessonPlanDeletingOccId: occId, lessonPlansError: null, success: null });
 
   api
-    .delete(`/lesson_plans/${lpId}/lesson_plan_occurrences/${occId}`, {
-      withCredentials: true
-    })
+    .delete(`/lesson_plans/${lpId}/lesson_plan_occurrences/${occId}`)
     .then(() => {
       this.setState({ lessonPlanDeletingOccId: null, success: "Lesson plan removed from roster schedule." });
 
@@ -605,8 +593,7 @@ weeklyOverviewError: null,
             ends_at,
             location: (location || "").trim()
           }
-        },
-        { withCredentials: true }
+        }
       )
       .then(() => {
         this.setState({
@@ -637,9 +624,7 @@ weeklyOverviewError: null,
     this.setState({ meetingDeletingId: meetingId, meetingError: null, meetingSuccess: null });
 
     api
-      .delete(`/rosters/${id}/roster_meetings/${meetingId}`, {
-        withCredentials: true
-      })
+      .delete(`/rosters/${id}/roster_meetings/${meetingId}`)
       .then(() => {
         this.setState({ meetingDeletingId: null, meetingSuccess: "Meeting removed." });
         this.loadMeetingsMatches();
@@ -670,7 +655,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, weeklyError: null });
 
     api
-      .post(`/rosters/${id}/roster_schedules`, payload, { withCredentials: true })
+      .post(`/rosters/${id}/roster_schedules`, payload)
       .then(() => {
         this.setState({
           saving: false,
@@ -696,9 +681,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, weeklyError: null });
 
     api
-      .delete(`/rosters/${id}/roster_schedules/${scheduleId}`, {
-        withCredentials: true
-      })
+      .delete(`/rosters/${id}/roster_schedules/${scheduleId}`)
       .then(() => {
         this.setState({ saving: false, success: "Weekly time removed." });
         this.loadWeeklySchedules();
@@ -720,7 +703,7 @@ weeklyOverviewError: null,
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`/rosters/${id}`, { withCredentials: true })
+      .delete(`/rosters/${id}`)
       .then(() => this.props.navigate("/rosters"))
       .catch((err) => {
         const msg =
@@ -738,7 +721,7 @@ weeklyOverviewError: null,
     this.setState({ meetingsLoading: true, meetingsError: null });
 
     api
-      .get(`/rosters/${id}/scheduled_lessons`, { withCredentials: true })
+      .get(`/rosters/${id}/scheduled_lessons`)
       .then((res) => {
         this.setState({ meetingsMatches: res.data?.matches || [], meetingsLoading: false });
       })
@@ -839,8 +822,7 @@ saveTitle = () => {
   api
     .patch(
       `/rosters/${id}`,
-      { roster: { name } },
-      { withCredentials: true }
+      { roster: { name } }
     )
     .then((res) => {
       const updated = res.data?.roster ?? res.data;
