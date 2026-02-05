@@ -425,8 +425,8 @@ export default function RostersIndex({ currentUser }) {
             <Card.Text className="text-muted mb-3">
               Create your first roster to group students.
             </Card.Text>
-            <Link to="/rosters/new" className="btn btn-primary rounded-pill px-3">
-              Create a roster
+            <Link to="/rosters/new" style={{ fontSize: 12 }} className="btn btn-primary rounded-pill px-3">
+              + New Roster
             </Link>
           </Card.Body>
         </Card>
