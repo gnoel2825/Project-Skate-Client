@@ -656,7 +656,7 @@ loadWeeklyOverview = async () => {
       .filter((r) => r?.id != null)
       .map((r) =>
         api
-          .get(`/rosters/${r.id}/roster_schedules`})
+          .get(`/rosters/${r.id}/roster_schedules`)
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );
