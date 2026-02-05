@@ -227,7 +227,7 @@ class StudentShow extends Component {
     this.setState({ loading: true, error: null, success: null });
 
     api
-      .get(`${API_BASE}/students/${id}`, { withCredentials: true })
+      .get(`/students/${id}`, { withCredentials: true })
       .then((res) => {
         const s = res.data;
         this.setState({
@@ -276,7 +276,7 @@ class StudentShow extends Component {
 
     api
       .patch(
-        `${API_BASE}/students/${id}`,
+        `/students/${id}`,
         {
           student: {
             first_name: (first_name || "").trim(),
@@ -313,7 +313,7 @@ class StudentShow extends Component {
     this.setState({ deleting: true, error: null, success: null });
 
     api
-      .delete(`${API_BASE}/students/${id}`, { withCredentials: true })
+      .delete(`/students/${id}`, { withCredentials: true })
       .then(() => this.props.navigate("/students"))
       .catch((err) => {
         const msg =

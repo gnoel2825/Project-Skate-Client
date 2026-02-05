@@ -146,7 +146,7 @@ const prettyMonthDay = (month, day) => {
 
 export default function MyStudentsCard({
   title = "My Students",
-  endpoint = `${API_BASE}/students_from_rosters`,
+  endpoint = `/students_from_rosters`,
   initialLimit = 5,
 }) {
   const [students, setStudents] = useState([]);

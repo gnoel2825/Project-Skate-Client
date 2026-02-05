@@ -266,9 +266,9 @@ class CalendarPage extends Component {
     // 1) get rosters list
     let rostersRes = null;
     try {
-      rostersRes = await api.get(`${API_BASE}/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters`, { withCredentials: true });
     } catch (e1) {
-      rostersRes = await api.get(`${API_BASE}/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -278,7 +278,7 @@ class CalendarPage extends Component {
       .filter((r) => r?.id != null)
       .map((r) =>
         api
-          .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );
@@ -334,7 +334,7 @@ class CalendarPage extends Component {
     });
 
     api
-      .get(`${API_BASE}/lesson_plans_by_date`, {
+      .get(`/lesson_plans_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
       })
@@ -349,7 +349,7 @@ class CalendarPage extends Component {
       });
 
     api
-      .get(`${API_BASE}/rosters_by_date`, {
+      .get(`/rosters_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
       })
@@ -364,7 +364,7 @@ class CalendarPage extends Component {
       });
 
     api
-      .get(`${API_BASE}/roster_meetings_by_date`, {
+      .get(`/roster_meetings_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
       })

@@ -211,11 +211,11 @@ weeklyOverviewError: null,
     this.setState({ loading: true, error: null, success: null });
 
     Promise.all([
-      api.get(`${API_BASE}/lesson_plans/${id}`, {
+      api.get(`/lesson_plans/${id}`, {
         withCredentials: true,
         params: lpParams,
       }),
-      api.get(`${API_BASE}/skills`, { withCredentials: true }),
+      api.get(`/skills`, { withCredentials: true }),
     ])
       .then(([lpRes, skillsRes]) => {
         const lp = lpRes.data;
@@ -303,7 +303,7 @@ cancelEdit = () => {
   this.setState({ saving: true, error: null, success: null });
 
   api
-    .patch(`${API_BASE}/lesson_plans/${id}`, payload, { withCredentials: true })
+    .patch(`/lesson_plans/${id}`, payload, { withCredentials: true })
     .then((res) => {
       // ✅ support both shapes:
       //   render json: lesson_plan
@@ -342,7 +342,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`${API_BASE}/lesson_plans/${id}/remove_skill/${skillId}`, {
+      .delete(`/lesson_plans/${id}/remove_skill/${skillId}`, {
         withCredentials: true,
         params: { role },
       })
@@ -374,7 +374,7 @@ cancelEdit = () => {
 
     api
       .post(
-        `${API_BASE}/lesson_plans/${id}/add_skills`,
+        `/lesson_plans/${id}/add_skills`,
         { skill_ids: skillIds, role },
         { withCredentials: true }
       )
@@ -405,7 +405,7 @@ cancelEdit = () => {
 
     api
       .post(
-        `${API_BASE}/lesson_plans/${id}/lesson_plan_occurrences`,
+        `/lesson_plans/${id}/lesson_plan_occurrences`,
         {
           lesson_plan_occurrence: {
             taught_on: newTaughtOn,
@@ -441,7 +441,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null, success: null });
 
     api
-      .delete(`${API_BASE}/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`, {
+      .delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`, {
         withCredentials: true,
       })
       .then(() => {
@@ -466,7 +466,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null });
 
     api
-      .delete(`${API_BASE}/lesson_plans/${id}`, { withCredentials: true })
+      .delete(`/lesson_plans/${id}`, { withCredentials: true })
       .then(() => {
         this.props.navigate("/lesson-plans");
       })
@@ -649,10 +649,10 @@ loadWeeklyOverview = async () => {
     let rostersRes = null;
 
     try {
-      rostersRes = await api.get(`${API_BASE}/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters`, { withCredentials: true });
     } catch (e1) {
       // fallback if your app uses a different route name
-      rostersRes = await api.get(`${API_BASE}/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -662,7 +662,7 @@ loadWeeklyOverview = async () => {
       .filter((r) => r?.id != null)
       .map((r) =>
         api
-          .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );

@@ -102,7 +102,7 @@ export default function AdminUsersPage() {
     setLoading(true);
 
     api
-      .get(`${API_BASE}/admin/users`, { withCredentials: true })
+      .get(`/admin/users`, { withCredentials: true })
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : [];
         setUsers(list);
@@ -161,7 +161,7 @@ export default function AdminUsersPage() {
 
     try {
       const res = await api.patch(
-        `${API_BASE}/admin/users/${u.id}`,
+        `/admin/users/${u.id}`,
         { user: { email: d.email, first_name: d.first_name, last_name: d.last_name, role: d.role } },
         { withCredentials: true }
       );
@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
   const deleteUser = async (id, email) => {
     setErr(null);
     try {
-      await api.delete(`${API_BASE}/admin/users/${id}`, { withCredentials: true });
+      await api.delete(`/admin/users/${id}`, { withCredentials: true });
       setUsers((prev) => prev.filter((u) => u.id !== id));
       setDrafts((prev) => {
         const copy = { ...prev };
@@ -207,7 +207,7 @@ export default function AdminUsersPage() {
     setErr(null);
     try {
       const res = await api.post(
-        `${API_BASE}/admin/users`,
+        `/admin/users`,
         { user: create },
         { withCredentials: true }
       );

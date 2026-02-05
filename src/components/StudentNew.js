@@ -44,7 +44,7 @@ class StudentNew extends Component {
 
     api
       .post(
-        `${API_BASE}/students`,
+        `/students`,
         {
           student: {
             first_name: first_name.trim(),

@@ -120,8 +120,8 @@ export default function MyLessonPlans() {
 
   useEffect(() => {
     const url = rosterId
-      ? `${API_BASE}/rosters/${rosterId}/lesson_plans_matching_schedule`
-      : `${API_BASE}/lesson_plans`;
+      ? `/rosters/${rosterId}/lesson_plans_matching_schedule`
+      : `/lesson_plans`;
 
     const params = rosterId ? { scope: "all" } : undefined;
 

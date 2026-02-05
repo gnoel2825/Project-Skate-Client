@@ -24,7 +24,7 @@ function DangerZone({ setCurrentUser }) {
   setErr(null);
 
   try {
-    await api.delete(`${API_BASE}/account`, { withCredentials: true });
+    await api.delete(`/account`, { withCredentials: true });
 
     // Clear any frontend auth state
     setCurrentUser(null);
