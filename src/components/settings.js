@@ -4,6 +4,9 @@ import { useNavigate } from "react-router-dom";
 import DangerZone from "./DangerZone";
 import Button from "react-bootstrap/Button";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 export default function Settings({ currentUser, setCurrentUser }) {
   const navigate = useNavigate();
 
@@ -44,7 +47,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
 
     axios
       .patch(
-        "http://localhost:3000/password",
+        `${API_BASE}/password`,
         {
           user: {
             current_password: currentPassword,
@@ -73,7 +76,7 @@ export default function Settings({ currentUser, setCurrentUser }) {
 
     axios
       .patch(
-        "http://localhost:3000/profile",
+        `${API_BASE}/profile`,
         {
           user: {
             first_name: firstName.trim(),

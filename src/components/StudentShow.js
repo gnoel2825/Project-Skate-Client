@@ -10,6 +10,9 @@ import Badge from "react-bootstrap/Badge";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 function withRouter(Component) {
   return (props) => {
     const params = useParams();
@@ -224,7 +227,7 @@ class StudentShow extends Component {
     this.setState({ loading: true, error: null, success: null });
 
     axios
-      .get(`http://localhost:3000/students/${id}`, { withCredentials: true })
+      .get(`${API_BASE}/students/${id}`, { withCredentials: true })
       .then((res) => {
         const s = res.data;
         this.setState({
@@ -273,7 +276,7 @@ class StudentShow extends Component {
 
     axios
       .patch(
-        `http://localhost:3000/students/${id}`,
+        `${API_BASE}/students/${id}`,
         {
           student: {
             first_name: (first_name || "").trim(),
@@ -310,7 +313,7 @@ class StudentShow extends Component {
     this.setState({ deleting: true, error: null, success: null });
 
     axios
-      .delete(`http://localhost:3000/students/${id}`, { withCredentials: true })
+      .delete(`${API_BASE}/students/${id}`, { withCredentials: true })
       .then(() => this.props.navigate("/students"))
       .catch((err) => {
         const msg =

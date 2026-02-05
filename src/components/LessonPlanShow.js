@@ -11,6 +11,8 @@ import Form from "react-bootstrap/Form";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 
 function withParams(Component) {
   return (props) => {
@@ -209,11 +211,11 @@ weeklyOverviewError: null,
     this.setState({ loading: true, error: null, success: null });
 
     Promise.all([
-      axios.get(`http://localhost:3000/lesson_plans/${id}`, {
+      axios.get(`${API_BASE}/lesson_plans/${id}`, {
         withCredentials: true,
         params: lpParams,
       }),
-      axios.get("http://localhost:3000/skills", { withCredentials: true }),
+      axios.get(`${API_BASE}/skills`, { withCredentials: true }),
     ])
       .then(([lpRes, skillsRes]) => {
         const lp = lpRes.data;
@@ -301,7 +303,7 @@ cancelEdit = () => {
   this.setState({ saving: true, error: null, success: null });
 
   axios
-    .patch(`http://localhost:3000/lesson_plans/${id}`, payload, { withCredentials: true })
+    .patch(`${API_BASE}/lesson_plans/${id}`, payload, { withCredentials: true })
     .then((res) => {
       // ✅ support both shapes:
       //   render json: lesson_plan
@@ -340,7 +342,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null, success: null });
 
     axios
-      .delete(`http://localhost:3000/lesson_plans/${id}/remove_skill/${skillId}`, {
+      .delete(`${API_BASE}/lesson_plans/${id}/remove_skill/${skillId}`, {
         withCredentials: true,
         params: { role },
       })
@@ -372,7 +374,7 @@ cancelEdit = () => {
 
     axios
       .post(
-        `http://localhost:3000/lesson_plans/${id}/add_skills`,
+        `${API_BASE}/lesson_plans/${id}/add_skills`,
         { skill_ids: skillIds, role },
         { withCredentials: true }
       )
@@ -403,7 +405,7 @@ cancelEdit = () => {
 
     axios
       .post(
-        `http://localhost:3000/lesson_plans/${id}/lesson_plan_occurrences`,
+        `${API_BASE}/lesson_plans/${id}/lesson_plan_occurrences`,
         {
           lesson_plan_occurrence: {
             taught_on: newTaughtOn,
@@ -439,7 +441,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null, success: null });
 
     axios
-      .delete(`http://localhost:3000/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`, {
+      .delete(`${API_BASE}/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`, {
         withCredentials: true,
       })
       .then(() => {
@@ -464,7 +466,7 @@ cancelEdit = () => {
     this.setState({ saving: true, error: null });
 
     axios
-      .delete(`http://localhost:3000/lesson_plans/${id}`, { withCredentials: true })
+      .delete(`${API_BASE}/lesson_plans/${id}`, { withCredentials: true })
       .then(() => {
         this.props.navigate("/lesson-plans");
       })
@@ -647,10 +649,10 @@ loadWeeklyOverview = async () => {
     let rostersRes = null;
 
     try {
-      rostersRes = await axios.get("http://localhost:3000/rosters", { withCredentials: true });
+      rostersRes = await axios.get(`${API_BASE}/rosters`, { withCredentials: true });
     } catch (e1) {
       // fallback if your app uses a different route name
-      rostersRes = await axios.get("http://localhost:3000/rosters/all", { withCredentials: true });
+      rostersRes = await axios.get(`${API_BASE}/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -660,7 +662,7 @@ loadWeeklyOverview = async () => {
       .filter((r) => r?.id != null)
       .map((r) =>
         axios
-          .get(`http://localhost:3000/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );

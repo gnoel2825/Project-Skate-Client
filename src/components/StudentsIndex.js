@@ -8,6 +8,9 @@ import Button from "react-bootstrap/Button";
 import Alert from "react-bootstrap/Alert";
 import Form from "react-bootstrap/Form";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 /* =======================
    Pagination helpers (same as Rosters)
 ======================= */
@@ -122,7 +125,7 @@ export default function StudentsIndex({ currentUser }) {
     setError(null);
 
     axios
-      .get("http://localhost:3000/students", { withCredentials: true })
+      .get(`${API_BASE}/students`, { withCredentials: true })
       .then((res) => {
         setStudents(Array.isArray(res.data) ? res.data : res.data || []);
         setLoading(false);

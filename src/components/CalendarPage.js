@@ -134,6 +134,8 @@ const everyWeekdayLabel = (weekdayNum) => {
   return `${name} •`;
 };
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 
 /* =======================
    Query wrapper
@@ -264,9 +266,9 @@ class CalendarPage extends Component {
     // 1) get rosters list
     let rostersRes = null;
     try {
-      rostersRes = await axios.get("http://localhost:3000/rosters", { withCredentials: true });
+      rostersRes = await axios.get(`${API_BASE}/rosters`, { withCredentials: true });
     } catch (e1) {
-      rostersRes = await axios.get("http://localhost:3000/rosters/all", { withCredentials: true });
+      rostersRes = await axios.get(`${API_BASE}/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -276,7 +278,7 @@ class CalendarPage extends Component {
       .filter((r) => r?.id != null)
       .map((r) =>
         axios
-          .get(`http://localhost:3000/rosters/${r.id}/roster_schedules`, { withCredentials: true })
+          .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
       );
@@ -332,7 +334,7 @@ class CalendarPage extends Component {
     });
 
     axios
-      .get("http://localhost:3000/lesson_plans_by_date", {
+      .get(`${API_BASE}/lesson_plans_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
       })
@@ -347,7 +349,7 @@ class CalendarPage extends Component {
       });
 
     axios
-      .get("http://localhost:3000/rosters_by_date", {
+      .get(`${API_BASE}/rosters_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
       })
@@ -362,7 +364,7 @@ class CalendarPage extends Component {
       });
 
     axios
-      .get("http://localhost:3000/roster_meetings_by_date", {
+      .get(`${API_BASE}/roster_meetings_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
       })

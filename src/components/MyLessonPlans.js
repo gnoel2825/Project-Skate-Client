@@ -6,6 +6,8 @@ import Badge from "react-bootstrap/Badge";
 import { Link, useSearchParams } from "react-router-dom";
 import Button from "react-bootstrap/Button";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 /* =======================
    Pagination helpers
 ======================= */
@@ -118,8 +120,8 @@ export default function MyLessonPlans() {
 
   useEffect(() => {
     const url = rosterId
-      ? `http://localhost:3000/rosters/${rosterId}/lesson_plans_matching_schedule`
-      : "http://localhost:3000/lesson_plans";
+      ? `${API_BASE}/rosters/${rosterId}/lesson_plans_matching_schedule`
+      : `${API_BASE}/lesson_plans`;
 
     const params = rosterId ? { scope: "all" } : undefined;
 
