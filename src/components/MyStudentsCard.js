@@ -10,6 +10,9 @@ import { Link } from "react-router-dom";
 import { CIcon } from "@coreui/icons-react";
 import { cilChevronRight } from "@coreui/icons";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 function displayNameFL(s) {
   const first = (s.first_name || "").trim();
   const last = (s.last_name || "").trim();
@@ -143,7 +146,7 @@ const prettyMonthDay = (month, day) => {
 
 export default function MyStudentsCard({
   title = "My Students",
-  endpoint = "http://localhost:3000/students_from_rosters",
+  endpoint = `${API_BASE}/students_from_rosters`,
   initialLimit = 5,
 }) {
   const [students, setStudents] = useState([]);

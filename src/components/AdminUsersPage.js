@@ -13,6 +13,9 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 function buildPageButtons(page, totalPages) {
   if (totalPages <= 1) return [{ type: "page", value: 1 }];
   if (totalPages <= 4) {
@@ -99,7 +102,7 @@ export default function AdminUsersPage() {
     setLoading(true);
 
     axios
-      .get("http://localhost:3000/admin/users", { withCredentials: true })
+      .get(`${API_BASE}/admin/users`, { withCredentials: true })
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : [];
         setUsers(list);
@@ -158,7 +161,7 @@ export default function AdminUsersPage() {
 
     try {
       const res = await axios.patch(
-        `http://localhost:3000/admin/users/${u.id}`,
+        `${API_BASE}/admin/users/${u.id}`,
         { user: { email: d.email, first_name: d.first_name, last_name: d.last_name, role: d.role } },
         { withCredentials: true }
       );
@@ -188,7 +191,7 @@ export default function AdminUsersPage() {
   const deleteUser = async (id, email) => {
     setErr(null);
     try {
-      await axios.delete(`http://localhost:3000/admin/users/${id}`, { withCredentials: true });
+      await axios.delete(`${API_BASE}/admin/users/${id}`, { withCredentials: true });
       setUsers((prev) => prev.filter((u) => u.id !== id));
       setDrafts((prev) => {
         const copy = { ...prev };
@@ -204,7 +207,7 @@ export default function AdminUsersPage() {
     setErr(null);
     try {
       const res = await axios.post(
-        "http://localhost:3000/admin/users",
+        `${API_BASE}/admin/users`,
         { user: create },
         { withCredentials: true }
       );

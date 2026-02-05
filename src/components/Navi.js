@@ -23,6 +23,8 @@ import {
   cilAccountLogout,
 } from "@coreui/icons";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: cilCalendar, end: true },
   { to: "/students", label: "Students", icon: cilAddressBook },
@@ -64,7 +66,7 @@ export const Navi = ({ handleLogout, currentUser }) => {
   const handleLogoutClick = async (e) => {
     e?.preventDefault?.();
     try {
-      await axios.delete("http://localhost:3000/logout", { withCredentials: true });
+      await axios.delete(`${API_BASE}/logout`, { withCredentials: true });
     } catch (error) {
       console.error("Logout failed", error);
     } finally {

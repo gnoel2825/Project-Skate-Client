@@ -1,10 +1,12 @@
 import React from "react";
 import axios from "axios";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
 export default function Dashboard({ handleLogout, currentUser }) {
   const handleClick = () => {
     axios
-      .delete("http://localhost:3000/logout", { withCredentials: true })
+      .delete(`${API_BASE}/logout`, { withCredentials: true })
       .then(() => {
         handleLogout(); // updates App state
       })

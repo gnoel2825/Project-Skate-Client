@@ -22,6 +22,9 @@ function CreateLessonPlanWithNavAndQuery(props) {
 
 export default CreateLessonPlanWithNavAndQuery;
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 /* ======================================================
    Helpers
 ====================================================== */
@@ -88,7 +91,7 @@ class CreateLessonPlan extends Component {
     this.setState({ loadingSkills: true, errors: [], success: null });
 
     axios
-      .get("http://localhost:3000/skills", { withCredentials: true })
+      .get(`${API_BASE}/skills`, { withCredentials: true })
       .then((res) => this.setState({ skills: res.data || [], loadingSkills: false }))
       .catch((err) =>
         this.setState({
@@ -150,7 +153,7 @@ class CreateLessonPlan extends Component {
     try {
       // 1) Create plan (includes notes)
       const lpRes = await axios.post(
-        "http://localhost:3000/lesson_plans",
+        `${API_BASE}/lesson_plans`,
         {
           lesson_plan: {
             title,
@@ -173,7 +176,7 @@ class CreateLessonPlan extends Component {
       };
 
       await axios.post(
-        `http://localhost:3000/lesson_plans/${lessonPlanId}/add_skills`,
+        `${API_BASE}/lesson_plans/${lessonPlanId}/add_skills`,
         payloadV2,
         { withCredentials: true }
       );
@@ -197,7 +200,7 @@ class CreateLessonPlan extends Component {
           );
 
           await axios.post(
-            `http://localhost:3000/lesson_plans/${lessonPlanId}/add_skills`,
+            `${API_BASE}/lesson_plans/${lessonPlanId}/add_skills`,
             { skill_ids: legacy },
             { withCredentials: true }
           );

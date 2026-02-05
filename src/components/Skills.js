@@ -4,6 +4,9 @@ import Card from "react-bootstrap/Card";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 export default class Skills extends Component {
   state = {
     skills: [],
@@ -13,7 +16,7 @@ export default class Skills extends Component {
 
   componentDidMount() {
     axios
-      .get("http://localhost:3000/skills", { withCredentials: true })
+      .get(`${API_BASE}/skills`, { withCredentials: true })
       .then((res) => {
         this.setState({ skills: res.data, loading: false });
       })

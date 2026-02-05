@@ -23,8 +23,7 @@ import StudentNew from "./components/StudentNew";
 import AdminUsersPage from "./components/AdminUsersPage";
 
 
-
-
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
 
 
 export default class App extends Component {
@@ -51,7 +50,7 @@ export default class App extends Component {
 
   checkLoginStatus() {
   axios
-    .get("http://localhost:3000/logged_in", { withCredentials: true })
+    .get(`${API_BASE}/logged_in`, { withCredentials: true })
     .then((response) => {
       const nextStatus = response.data.logged_in ? "LOGGED_IN" : "NOT_LOGGED_IN";
       const nextUser = response.data.user || null;

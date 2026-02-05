@@ -10,6 +10,9 @@ import Form from "react-bootstrap/Form";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 function withNav(Component) {
   return (props) => {
     const navigate = useNavigate();
@@ -41,7 +44,7 @@ class StudentNew extends Component {
 
     axios
       .post(
-        "http://localhost:3000/students",
+        `${API_BASE}/students`,
         {
           student: {
             first_name: first_name.trim(),

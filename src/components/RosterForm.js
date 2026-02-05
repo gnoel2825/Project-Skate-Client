@@ -6,6 +6,9 @@ import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
 import Alert from "react-bootstrap/Alert";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
+
+
 function withRouter(Component) {
   return (props) => {
     const params = useParams();
@@ -41,7 +44,7 @@ class RosterForm extends Component {
     this.setState({ loading: true, error: null });
 
     axios
-      .get(`http://localhost:3000/rosters/${id}`, { withCredentials: true })
+      .get(`${API_BASE}/rosters/${id}`, { withCredentials: true })
       .then((res) => {
         this.setState({
           name: res.data?.name || "",
@@ -58,7 +61,7 @@ class RosterForm extends Component {
       });
      
       axios
-  .get("http://localhost:3000/students", { withCredentials: true })
+  .get(`${API_BASE}/students`, { withCredentials: true })
   .then((res) => this.setState({ allStudents: res.data || [] }))
   .catch(() => {});
 
@@ -102,8 +105,8 @@ removeStudent = (id) => {
   };
 
   const req = id
-    ? axios.patch(`http://localhost:3000/rosters/${id}`, payload, { withCredentials: true })
-    : axios.post("http://localhost:3000/rosters", payload, { withCredentials: true });
+    ? axios.patch(`${API_BASE}/rosters/${id}`, payload, { withCredentials: true })
+    : axios.post(`${API_BASE}/rosters`, payload, { withCredentials: true });
 
   req
     .then((res) => {
