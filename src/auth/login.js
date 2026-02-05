@@ -17,43 +17,30 @@ export default class Login extends Component {
     this.handleChange = this.handleChange.bind(this);
   }
 
- handleSubmit(event) {
-  event.preventDefault();
-
+ handleSubmit(e) {
+  e.preventDefault();
   const email = this.state.email.trim().toLowerCase();
   const password = this.state.password;
 
-  api
-    .post(
-      `/sessions`,
-      { user: { email, password } })
-    .then((response) => {
-  console.log("LOGIN THEN", response.status, response.data);
+  api.post("/sessions", { user: { email, password } })
+    .then((res) => {
+      localStorage.setItem("authToken", res.data.token);
+      this.setState({ loginErrors: "" });
 
-  const { user, token } = response.data || {};
-
-  if (token && user) {
-    localStorage.setItem("authToken", token);
-    console.log("BUILD VERSION:", "2026-02-05-22:15");
-    console.log("saved token?", localStorage.getItem("authToken"));
-    console.log("API_BASE:", process.env.REACT_APP_API_BASE_URL);
-    this.setState({ loginErrors: "" });
-    this.props.handleSuccessfulAuth({ user, token });
-    return;
-  }
-
-  this.setState({ loginErrors: "Login failed. Missing token." });
-}).catch((error) => {
-  console.log("LOGIN CATCH raw error:", error);
-
-  const msg =
-    error?.response?.data?.errors?.join(", ") ||
-    error?.message ||
-    "Login failed. Please try again.";
-
-  this.setState({ loginErrors: msg });
-});
- }
+      // pass user + token up
+      this.props.handleSuccessfulAuth({
+        user: res.data.user,
+        token: res.data.token
+      });
+    })
+    .catch((err) => {
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.errors?.join(", ") ||
+        "Invalid email or password";
+      this.setState({ loginErrors: msg });
+    });
+}
 
 
 
