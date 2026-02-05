@@ -80,7 +80,6 @@ export default class Login extends Component {
               onChange={this.handleChange}
             />
           </div>
-
           <div className="form-group">
             <input
               className="form-control"
@@ -96,7 +95,7 @@ export default class Login extends Component {
           {this.state.loginErrors && (
             <div className="text-danger">{this.state.loginErrors}</div>
           )}
-
+<br/>
           <button type="submit" className="btn btn-primary btn-sm">
             Login
           </button>
