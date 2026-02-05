@@ -1,7 +1,7 @@
 import React, { Component } from "react";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Navi } from "./components/Navi";
-import axios from "axios";
+import api from "./api";
 import "bootstrap/dist/css/bootstrap.min.css";
 import '@coreui/coreui/dist/css/coreui.min.css'
 import "./App.css";
@@ -49,7 +49,7 @@ export default class App extends Component {
 
 
   checkLoginStatus() {
-  axios
+  api
     .get(`${API_BASE}/logged_in`, { withCredentials: true })
     .then((response) => {
       const nextStatus = response.data.logged_in ? "LOGGED_IN" : "NOT_LOGGED_IN";
