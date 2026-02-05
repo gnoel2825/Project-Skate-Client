@@ -1,6 +1,6 @@
 // src/components/StudentNew.js
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { useNavigate } from "react-router-dom";
 
 import Card from "react-bootstrap/Card";
@@ -42,7 +42,7 @@ class StudentNew extends Component {
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .post(
         `${API_BASE}/students`,
         {

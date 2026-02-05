@@ -4,7 +4,7 @@ import Alert from "react-bootstrap/Alert";
 import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
-import axios from "axios";
+import api from "../api";
 import React, { useState } from "react";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL;
@@ -24,7 +24,7 @@ function DangerZone({ setCurrentUser }) {
   setErr(null);
 
   try {
-    await axios.delete(`${API_BASE}/account`, { withCredentials: true });
+    await api.delete(`${API_BASE}/account`, { withCredentials: true });
 
     // Clear any frontend auth state
     setCurrentUser(null);

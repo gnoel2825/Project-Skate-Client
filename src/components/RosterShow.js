@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Card from "react-bootstrap/Card";
 import Button from "react-bootstrap/Button";
@@ -272,7 +272,7 @@ weeklyOverviewError: null,
 
     this.setState({ weeklyLoading: true, weeklyError: null });
 
-    axios
+    api
       .get(`${API_BASE}/rosters/${id}/roster_schedules`, { withCredentials: true })
       .then((res) => {
         const weeklySchedules = res.data || [];
@@ -285,7 +285,7 @@ weeklyOverviewError: null,
             lessonPlansError: null
           },
           () => {
-            axios
+            api
               .get(`${API_BASE}/rosters/${id}/lesson_plans_matching_schedule?scope=all`, {
                 withCredentials: true
               })
@@ -327,9 +327,9 @@ weeklyOverviewError: null,
     });
 
     Promise.all([
-      axios.get(`${API_BASE}/rosters/${id}`, { withCredentials: true }),
-      axios.get(`${API_BASE}/students/all`, { withCredentials: true }),
-      axios.get(`${API_BASE}/users?role=teacher`, { withCredentials: true })
+      api.get(`${API_BASE}/rosters/${id}`, { withCredentials: true }),
+      api.get(`${API_BASE}/students/all`, { withCredentials: true }),
+      api.get(`${API_BASE}/users?role=teacher`, { withCredentials: true })
     ])
       .then(([rosterRes, studentsRes, teachersRes]) => {
         const teachersData = teachersRes.data;
@@ -386,9 +386,9 @@ weeklyOverviewError: null,
     let rostersRes = null;
 
     try {
-      rostersRes = await axios.get(`${API_BASE}/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`${API_BASE}/rosters`, { withCredentials: true });
     } catch (e1) {
-      rostersRes = await axios.get(`${API_BASE}/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`${API_BASE}/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -397,7 +397,7 @@ weeklyOverviewError: null,
     const scheduleRequests = (rosters || [])
       .filter((r) => r?.id != null)
       .map((r) =>
-        axios
+        api
           .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
@@ -449,7 +449,7 @@ weeklyOverviewError: null,
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .post(`${API_BASE}/rosters/${id}/add_student/${studentId}`, null, {
         withCredentials: true
       })
@@ -475,7 +475,7 @@ weeklyOverviewError: null,
     const { id } = this.props.params;
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .delete(`${API_BASE}/rosters/${id}/remove_student/${studentId}`, {
         withCredentials: true
       })
@@ -498,7 +498,7 @@ weeklyOverviewError: null,
 
     this.setState({ teacherSaving: true, teacherError: null, teacherSuccess: null });
 
-    axios
+    api
       .post(`${API_BASE}/rosters/${id}/add_teacher/${teacherId}`, null, {
         withCredentials: true
       })
@@ -525,7 +525,7 @@ weeklyOverviewError: null,
 
     this.setState({ teacherSaving: true, teacherError: null, teacherSuccess: null });
 
-    axios
+    api
       .delete(`${API_BASE}/rosters/${id}/remove_teacher/${teacherId}`, {
         withCredentials: true
       })
@@ -556,7 +556,7 @@ weeklyOverviewError: null,
 
   this.setState({ lessonPlanDeletingOccId: occId, lessonPlansError: null, success: null });
 
-  axios
+  api
     .delete(`${API_BASE}/lesson_plans/${lpId}/lesson_plan_occurrences/${occId}`, {
       withCredentials: true
     })
@@ -595,7 +595,7 @@ weeklyOverviewError: null,
 
     this.setState({ meetingSaving: true, meetingError: null, meetingSuccess: null });
 
-    axios
+    api
       .post(
         `${API_BASE}/rosters/${id}/roster_meetings`,
         {
@@ -636,7 +636,7 @@ weeklyOverviewError: null,
 
     this.setState({ meetingDeletingId: meetingId, meetingError: null, meetingSuccess: null });
 
-    axios
+    api
       .delete(`${API_BASE}/rosters/${id}/roster_meetings/${meetingId}`, {
         withCredentials: true
       })
@@ -669,7 +669,7 @@ weeklyOverviewError: null,
 
     this.setState({ saving: true, weeklyError: null });
 
-    axios
+    api
       .post(`${API_BASE}/rosters/${id}/roster_schedules`, payload, { withCredentials: true })
       .then(() => {
         this.setState({
@@ -695,7 +695,7 @@ weeklyOverviewError: null,
 
     this.setState({ saving: true, weeklyError: null });
 
-    axios
+    api
       .delete(`${API_BASE}/rosters/${id}/roster_schedules/${scheduleId}`, {
         withCredentials: true
       })
@@ -719,7 +719,7 @@ weeklyOverviewError: null,
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .delete(`${API_BASE}/rosters/${id}`, { withCredentials: true })
       .then(() => this.props.navigate("/rosters"))
       .catch((err) => {
@@ -737,7 +737,7 @@ weeklyOverviewError: null,
 
     this.setState({ meetingsLoading: true, meetingsError: null });
 
-    axios
+    api
       .get(`${API_BASE}/rosters/${id}/scheduled_lessons`, { withCredentials: true })
       .then((res) => {
         this.setState({ meetingsMatches: res.data?.matches || [], meetingsLoading: false });
@@ -836,7 +836,7 @@ saveTitle = () => {
 
   this.setState({ titleSaving: true, titleError: null, success: null, error: null });
 
-  axios
+  api
     .patch(
       `${API_BASE}/rosters/${id}`,
       { roster: { name } },

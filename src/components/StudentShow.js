@@ -1,6 +1,6 @@
 // src/components/StudentShow.js
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Card from "react-bootstrap/Card";
 import Button from "react-bootstrap/Button";
@@ -226,7 +226,7 @@ class StudentShow extends Component {
 
     this.setState({ loading: true, error: null, success: null });
 
-    axios
+    api
       .get(`${API_BASE}/students/${id}`, { withCredentials: true })
       .then((res) => {
         const s = res.data;
@@ -274,7 +274,7 @@ class StudentShow extends Component {
 
     this.setState({ saving: true, error: null, success: null });
 
-    axios
+    api
       .patch(
         `${API_BASE}/students/${id}`,
         {
@@ -312,7 +312,7 @@ class StudentShow extends Component {
 
     this.setState({ deleting: true, error: null, success: null });
 
-    axios
+    api
       .delete(`${API_BASE}/students/${id}`, { withCredentials: true })
       .then(() => this.props.navigate("/students"))
       .catch((err) => {

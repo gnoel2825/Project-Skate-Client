@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL;
 
@@ -23,7 +23,7 @@ export default class Login extends Component {
   const email = this.state.email.trim().toLowerCase();
   const password = this.state.password;
 
-  axios
+  api
     .post(
       `${API_BASE}/sessions`,
       { user: { email, password } })

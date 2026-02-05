@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import Card from "react-bootstrap/Card";
 import Form from "react-bootstrap/Form";
 import Badge from "react-bootstrap/Badge";
@@ -159,7 +159,7 @@ export default function MyStudentsCard({
     setLoading(true);
     setError(null);
 
-    axios
+    api
       .get(endpoint, { withCredentials: true })
       .then((res) => setStudents(Array.isArray(res.data) ? res.data : []))
       .catch((err) => {

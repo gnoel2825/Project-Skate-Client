@@ -1,6 +1,6 @@
 // src/components/MyLessonPlans.js
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import Form from "react-bootstrap/Form";
 import Badge from "react-bootstrap/Badge";
 import { Link, useSearchParams } from "react-router-dom";
@@ -125,7 +125,7 @@ export default function MyLessonPlans() {
 
     const params = rosterId ? { scope: "all" } : undefined;
 
-    axios
+    api
       .get(url, { withCredentials: true, params })
       .then((res) => {
         const data = res.data;

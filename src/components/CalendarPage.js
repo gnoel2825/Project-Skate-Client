@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import { useSearchParams, Link } from "react-router-dom";
 
 import Card from "react-bootstrap/Card";
@@ -266,9 +266,9 @@ class CalendarPage extends Component {
     // 1) get rosters list
     let rostersRes = null;
     try {
-      rostersRes = await axios.get(`${API_BASE}/rosters`, { withCredentials: true });
+      rostersRes = await api.get(`${API_BASE}/rosters`, { withCredentials: true });
     } catch (e1) {
-      rostersRes = await axios.get(`${API_BASE}/rosters/all`, { withCredentials: true });
+      rostersRes = await api.get(`${API_BASE}/rosters/all`, { withCredentials: true });
     }
 
     const rosters = coerceArray(rostersRes.data);
@@ -277,7 +277,7 @@ class CalendarPage extends Component {
     const scheduleRequests = (rosters || [])
       .filter((r) => r?.id != null)
       .map((r) =>
-        axios
+        api
           .get(`${API_BASE}/rosters/${r.id}/roster_schedules`, { withCredentials: true })
           .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
           .catch(() => ({ roster: r, schedules: [] }))
@@ -333,7 +333,7 @@ class CalendarPage extends Component {
       oneOffError: null,
     });
 
-    axios
+    api
       .get(`${API_BASE}/lesson_plans_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
@@ -348,7 +348,7 @@ class CalendarPage extends Component {
         this.setState({ error: msg, loading: false, occurrences: [] });
       });
 
-    axios
+    api
       .get(`${API_BASE}/rosters_by_date`, {
         withCredentials: true,
         params: { date: dateStr },
@@ -363,7 +363,7 @@ class CalendarPage extends Component {
         this.setState({ rostersError: msg, rostersLoading: false, rosters: [] });
       });
 
-    axios
+    api
       .get(`${API_BASE}/roster_meetings_by_date`, {
         withCredentials: true,
         params: { date: dateStr },

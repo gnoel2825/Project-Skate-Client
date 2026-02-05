@@ -1,6 +1,6 @@
 // src/components/RostersIndex.js
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import { Link } from "react-router-dom";
 
 import Card from "react-bootstrap/Card";
@@ -172,7 +172,7 @@ export default function RostersIndex({ currentUser }) {
     setLoading(true);
     setError(null);
 
-    axios
+    api
       .get(`${API_BASE}/rosters.json`, { withCredentials: true })
       .then((res) => {
         setRosters(Array.isArray(res.data) ? res.data : []);

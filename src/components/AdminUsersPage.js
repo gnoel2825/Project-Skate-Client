@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
@@ -101,7 +101,7 @@ export default function AdminUsersPage() {
     setErr(null);
     setLoading(true);
 
-    axios
+    api
       .get(`${API_BASE}/admin/users`, { withCredentials: true })
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : [];
@@ -160,7 +160,7 @@ export default function AdminUsersPage() {
     setSavedId(null);
 
     try {
-      const res = await axios.patch(
+      const res = await api.patch(
         `${API_BASE}/admin/users/${u.id}`,
         { user: { email: d.email, first_name: d.first_name, last_name: d.last_name, role: d.role } },
         { withCredentials: true }
@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
   const deleteUser = async (id, email) => {
     setErr(null);
     try {
-      await axios.delete(`${API_BASE}/admin/users/${id}`, { withCredentials: true });
+      await api.delete(`${API_BASE}/admin/users/${id}`, { withCredentials: true });
       setUsers((prev) => prev.filter((u) => u.id !== id));
       setDrafts((prev) => {
         const copy = { ...prev };
@@ -206,7 +206,7 @@ export default function AdminUsersPage() {
   const createUser = async () => {
     setErr(null);
     try {
-      const res = await axios.post(
+      const res = await api.post(
         `${API_BASE}/admin/users`,
         { user: create },
         { withCredentials: true }

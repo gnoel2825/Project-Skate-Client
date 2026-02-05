@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import axios from "axios";
+import api from "../api";
 import Card from "react-bootstrap/Card";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -15,7 +15,7 @@ export default class Skills extends Component {
   };
 
   componentDidMount() {
-    axios
+    api
       .get(`${API_BASE}/skills`, { withCredentials: true })
       .then((res) => {
         this.setState({ skills: res.data, loading: false });
