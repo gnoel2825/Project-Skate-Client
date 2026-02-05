@@ -35,40 +35,44 @@ export default class Registration extends Component {
     this.handleChange = this.handleChange.bind(this);
   }
 
-  handleSubmit(event) {
-    event.preventDefault();
+ handleSubmit(event) {
+  event.preventDefault();
 
-    axios
-      .post(
-        `${API_BASE}/registrations`,
-        {
-          user: {
-            first_name: this.state.first_name.trim(),
-            last_name: this.state.last_name.trim(),
-            email: this.state.email.trim().toLowerCase(),
-            password: this.state.password,
-            password_confirmation: this.state.password_confirmation,
-            role: this.state.role
-          }
-        },
-        { withCredentials: true }
-      )
-      .then((response) => {
-        if (response.data.logged_in) {
-          this.props.handleSuccessfulAuth(response.data);
-        } else {
-          this.setState({
-            registrationErrors: response.data.errors || ["Registration failed"]
-          });
-        }
-      })
-      .catch((error) => {
-        const msg = error.response?.data?.errors || [
-          error.message || "Registration failed"
-        ];
-        this.setState({ registrationErrors: msg });
+  axios
+    .post(`${API_BASE}/registrations`, {
+      user: {
+        first_name: this.state.first_name.trim(),
+        last_name: this.state.last_name.trim(),
+        email: this.state.email.trim().toLowerCase(),
+        password: this.state.password,
+        password_confirmation: this.state.password_confirmation,
+        role: this.state.role
+      }
+    })
+    .then((response) => {
+      const { user, token, errors } = response.data || {};
+
+      if (user && token) {
+        localStorage.setItem("authToken", token);
+        this.setState({ registrationErrors: [] });
+        this.props.handleSuccessfulAuth({ user, token });
+        return;
+      }
+
+      this.setState({
+        registrationErrors: errors || ["Registration failed"]
       });
-  }
+    })
+    .catch((error) => {
+      const msg =
+        error?.response?.data?.errors ||
+        [error?.response?.data?.error] ||
+        [error.message || "Registration failed"];
+
+      this.setState({ registrationErrors: msg });
+    });
+}
+
 
   handleChange(event) {
     this.setState({ [event.target.name]: event.target.value });
