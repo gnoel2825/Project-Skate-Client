@@ -116,9 +116,6 @@ const birthdayMonthDay = (value) => {
   if (!m || !d) return null;
   return { month: m, day: d };
 };
-const birthdayBadgeCount =
-  Math.min(upcomingBirthdays.length, 3) + Math.min(recentBirthdays.length, 2);
-
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
@@ -159,6 +156,10 @@ export default function MyStudentsCard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
+
+  const birthdayBadgeCount =
+  Math.min(upcomingBirthdays.length, 3) + Math.min(recentBirthdays.length, 2);
+
 
   useEffect(() => {
     setLoading(true);
