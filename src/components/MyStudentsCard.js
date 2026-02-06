@@ -157,10 +157,6 @@ export default function MyStudentsCard({
   const [error, setError] = useState(null);
   const [showAll, setShowAll] = useState(false);
 
-  const birthdayBadgeCount =
-  Math.min(upcomingBirthdays.length, 3) + Math.min(recentBirthdays.length, 2);
-
-
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -193,42 +189,46 @@ export default function MyStudentsCard({
     });
   }, [uniqueStudents, query]);
 
+  // When searching, automatically expand so results don’t feel hidden
   useEffect(() => {
     if (query.trim()) setShowAll(true);
   }, [query]);
 
   const { upcomingBirthdays, recentBirthdays } = useMemo(() => {
-  const UPCOMING_DAYS = 30;
-  const RECENT_DAYS = 14;
+    const UPCOMING_DAYS = 30;
+    const RECENT_DAYS = 14;
 
-  const items = uniqueStudents
-    .map((s) => {
-      const md = birthdayMonthDay(pickBirthday(s));
-      if (!md) return null;
-      const dist = birthdayDistance(md.month, md.day);
-      return { student: s, month: md.month, day: md.day, ...dist };
-    })
-    .filter(Boolean);
+    const items = uniqueStudents
+      .map((s) => {
+        const md = birthdayMonthDay(pickBirthday(s));
+        if (!md) return null;
+        const dist = birthdayDistance(md.month, md.day);
+        return { student: s, month: md.month, day: md.day, ...dist };
+      })
+      .filter(Boolean);
 
-  const upcoming = items
-    .filter((x) => x.daysUntil >= 0 && x.daysUntil <= UPCOMING_DAYS)
-    .sort((a, b) => a.daysUntil - b.daysUntil);
+    const upcoming = items
+      .filter((x) => x.daysUntil >= 0 && x.daysUntil <= UPCOMING_DAYS)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
 
-  // ✅ prevent double counting: if it's "upcoming", don't also show as "recent"
-  const upcomingIds = new Set(upcoming.map((x) => String(x.student?.id)));
+    // ✅ prevent double counting: if it's "upcoming", don't also show as "recent"
+    const upcomingIds = new Set(upcoming.map((x) => String(x.student?.id)));
 
-  const recent = items
-    .filter(
-      (x) =>
-        x.daysSince >= 0 &&
-        x.daysSince <= RECENT_DAYS &&
-        !upcomingIds.has(String(x.student?.id))
-    )
-    .sort((a, b) => a.daysSince - b.daysSince);
+    const recent = items
+      .filter(
+        (x) =>
+          x.daysSince >= 0 &&
+          x.daysSince <= RECENT_DAYS &&
+          !upcomingIds.has(String(x.student?.id))
+      )
+      .sort((a, b) => a.daysSince - b.daysSince);
 
-  return { upcomingBirthdays: upcoming, recentBirthdays: recent };
-}, [uniqueStudents]);
+    return { upcomingBirthdays: upcoming, recentBirthdays: recent };
+  }, [uniqueStudents]);
 
+  // ✅ safe to compute AFTER birthdays exist
+  const birthdayBadgeCount =
+    Math.min(upcomingBirthdays.length, 3) + Math.min(recentBirthdays.length, 2);
 
   const visible = showAll ? filtered : filtered.slice(0, initialLimit);
   const hiddenCount = Math.max(0, filtered.length - visible.length);
