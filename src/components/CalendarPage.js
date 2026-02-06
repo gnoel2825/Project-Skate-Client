@@ -799,7 +799,12 @@ class CalendarPage extends Component {
       };
 
       const normalizeRosterId = (obj) =>
-        obj?.roster?.id ?? obj?.roster_id ?? obj?.rosterId ?? null;
+  obj?.roster?.id ??
+  obj?.roster_id ??
+  obj?.rosterId ??
+  obj?.lesson_plan?.roster?.id ??
+  obj?.lesson_plan?.roster_id ??
+  null;
 
       // overlap: (start < end2) && (end > start2)
       const overlaps = (aStart, aEnd, bStart, bEnd) => {
@@ -827,6 +832,8 @@ class CalendarPage extends Component {
           schedule: s,
         }));
       });
+
+      
 
       const oneOffInstances = (this.state.oneOffMeetings || []).map((m) => ({
         type: "one-off",
