@@ -4,14 +4,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
-import axios from "axios";
-
-// attach token to every request
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("authToken");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+import api from "./api";
 
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

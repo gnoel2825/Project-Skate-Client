@@ -12,7 +12,6 @@ import { cilChevronRight } from "@coreui/icons";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL;
 
-
 function displayNameFL(s) {
   const first = (s.first_name || "").trim();
   const last = (s.last_name || "").trim();
@@ -30,7 +29,6 @@ function initialsFL(s) {
 }
 
 function hashToHue(str) {
-  // stable “random-ish” hue per student (based on id/name)
   let h = 0;
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360;
   return h;
@@ -63,9 +61,6 @@ function Avatar({ seed, text }) {
   );
 }
 
-const pickBirthday = (s) =>
-  s?.birthday || s?.birthdate || s?.date_of_birth || s?.dob || null;
-
 const SectionKicker = ({ children, className = "", style = {} }) => (
   <div
     className={`text-uppercase text-muted ${className}`}
@@ -75,10 +70,21 @@ const SectionKicker = ({ children, className = "", style = {} }) => (
   </div>
 );
 
+const uniqById = (arr) => {
+  const m = new Map();
+  (arr || []).forEach((s) => {
+    if (!s?.id) return;
+    m.set(String(s.id), s);
+  });
+  return Array.from(m.values());
+};
+
+const pickBirthday = (s) =>
+  s?.birthday || s?.birthdate || s?.date_of_birth || s?.dob || null;
+
 const normalizeYmd = (v) => {
   if (!v) return null;
 
-  // Date object
   if (v instanceof Date && !Number.isNaN(v.getTime())) {
     const yyyy = v.getFullYear();
     const mm = String(v.getMonth() + 1).padStart(2, "0");
@@ -89,11 +95,9 @@ const normalizeYmd = (v) => {
   const str = String(v).trim();
   if (!str) return null;
 
-  // ISO like "YYYY-MM-DDTHH:MM:SS..."
   const iso = str.match(/^(\d{4}-\d{2}-\d{2})/);
   if (iso) return iso[1];
 
-  // US like "MM/DD/YYYY"
   const us = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (us) {
     const mm = String(us[1]).padStart(2, "0");
@@ -112,7 +116,6 @@ const birthdayMonthDay = (value) => {
   if (!m || !d) return null;
   return { month: m, day: d };
 };
-
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
@@ -142,7 +145,6 @@ const prettyMonthDay = (month, day) => {
   const dt = new Date(2000, month - 1, day);
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(dt);
 };
-
 
 export default function MyStudentsCard({
   title = "My Students",
@@ -174,46 +176,46 @@ export default function MyStudentsCard({
       .finally(() => setLoading(false));
   }, [endpoint]);
 
+  const uniqueStudents = useMemo(() => uniqById(students), [students]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return students;
+    if (!q) return uniqueStudents;
 
-    return students.filter((s) => {
+    return uniqueStudents.filter((s) => {
       const name = `${s.first_name || ""} ${s.last_name || ""}`.toLowerCase();
       const email = (s.email || "").toLowerCase();
       return `${name} ${email}`.includes(q);
     });
-  }, [students, query]);
+  }, [uniqueStudents, query]);
 
-  // When searching, automatically expand so results don’t feel hidden
   useEffect(() => {
     if (query.trim()) setShowAll(true);
   }, [query]);
 
   const { upcomingBirthdays, recentBirthdays } = useMemo(() => {
-  const UPCOMING_DAYS = 30;
-  const RECENT_DAYS = 14;
+    const UPCOMING_DAYS = 30;
+    const RECENT_DAYS = 14;
 
-  const items = students
-    .map((s) => {
-      const md = birthdayMonthDay(s.birthday);
-      if (!md) return null;
-      const dist = birthdayDistance(md.month, md.day);
-      return { student: s, month: md.month, day: md.day, ...dist };
-    })
-    .filter(Boolean);
+    const items = uniqueStudents
+      .map((s) => {
+        const md = birthdayMonthDay(pickBirthday(s));
+        if (!md) return null;
+        const dist = birthdayDistance(md.month, md.day);
+        return { student: s, month: md.month, day: md.day, ...dist };
+      })
+      .filter(Boolean);
 
-  const upcoming = items
-    .filter((x) => x.daysUntil >= 0 && x.daysUntil <= UPCOMING_DAYS)
-    .sort((a, b) => a.daysUntil - b.daysUntil);
+    const upcoming = items
+      .filter((x) => x.daysUntil >= 0 && x.daysUntil <= UPCOMING_DAYS)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
 
-  const recent = items
-    .filter((x) => x.daysSince >= 0 && x.daysSince <= RECENT_DAYS)
-    .sort((a, b) => a.daysSince - b.daysSince);
+    const recent = items
+      .filter((x) => x.daysSince >= 0 && x.daysSince <= RECENT_DAYS)
+      .sort((a, b) => a.daysSince - b.daysSince);
 
-  return { upcomingBirthdays: upcoming, recentBirthdays: recent };
-}, [students]);
-
+    return { upcomingBirthdays: upcoming, recentBirthdays: recent };
+  }, [uniqueStudents]);
 
   const visible = showAll ? filtered : filtered.slice(0, initialLimit);
   const hiddenCount = Math.max(0, filtered.length - visible.length);
@@ -224,87 +226,87 @@ export default function MyStudentsCard({
         {/* Header */}
         <div className="d-flex justify-content-between align-items-center mb-2">
           <Card.Title className="mb-0">
-            <SectionKicker>{title} <Badge bg="secondary">{filtered.length}</Badge></SectionKicker>
+            <SectionKicker>
+              {title} <Badge bg="secondary">{filtered.length}</Badge>
+            </SectionKicker>
           </Card.Title>
         </div>
 
-
         {/* Birthdays */}
-{!loading && !error && (upcomingBirthdays.length > 0 || recentBirthdays.length > 0) && (
-  <div
-    className="border rounded p-2 mb-3"
-    style={{ background: "#fbfcfd", borderColor: "rgba(0,0,0,0.06)" }}
-  >
-    <div className="d-flex justify-content-between align-items-center mb-2">
-      <SectionKicker>Birthdays</SectionKicker>
-      <Badge bg="light" text="dark" style={{ fontWeight: 700 }}>
-        {upcomingBirthdays.length + recentBirthdays.length}
-      </Badge>
-    </div>
-
-    {/* Upcoming */}
-    {upcomingBirthdays.slice(0, 3).map((x) => {
-      const s = x.student;
-      const when =
-        x.daysUntil === 0 ? "Today" : x.daysUntil === 1 ? "Tomorrow" : `In ${x.daysUntil}d`;
-
-      return (
-        <Link
-          key={`up-${s.id}`}
-          to={`/students/${s.id}`}
-          className="text-decoration-none"
-          style={{ color: "inherit" }}
-        >
-          <div className="d-flex align-items-center justify-content-between gap-2 py-1">
-            <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
-              <Avatar seed={s.id ?? `${s.first_name}-${s.last_name}`} text={initialsFL(s)} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 650, fontSize: 13, lineHeight: 1.2 }}>
-                  {displayNameFL(s)}
-                </div>
-                <div className="text-muted" style={{ fontSize: 12 }}>
-                  {prettyMonthDay(x.month, x.day)} • {when}
-                </div>
-              </div>
+        {!loading && !error && (upcomingBirthdays.length > 0 || recentBirthdays.length > 0) && (
+          <div
+            className="border rounded p-2 mb-3"
+            style={{ background: "#fbfcfd", borderColor: "rgba(0,0,0,0.06)" }}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <SectionKicker>Birthdays</SectionKicker>
+              <Badge bg="light" text="dark" style={{ fontWeight: 700 }}>
+                {upcomingBirthdays.length + recentBirthdays.length}
+              </Badge>
             </div>
-            <span className="text-muted" style={{ fontSize: 12 }}>→</span>
+
+            {/* Upcoming */}
+            {upcomingBirthdays.slice(0, 3).map((x) => {
+              const s = x.student;
+              const when =
+                x.daysUntil === 0 ? "Today" : x.daysUntil === 1 ? "Tomorrow" : `In ${x.daysUntil}d`;
+
+              return (
+                <Link
+                  key={`up-${s.id}`}
+                  to={`/students/${s.id}`}
+                  className="text-decoration-none"
+                  style={{ color: "inherit" }}
+                >
+                  <div className="d-flex align-items-center justify-content-between gap-2 py-1">
+                    <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
+                      <Avatar seed={s.id ?? `${s.first_name}-${s.last_name}`} text={initialsFL(s)} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 650, fontSize: 13, lineHeight: 1.2 }}>
+                          {displayNameFL(s)}
+                        </div>
+                        <div className="text-muted" style={{ fontSize: 12 }}>
+                          {prettyMonthDay(x.month, x.day)} • {when}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-muted" style={{ fontSize: 12 }}>→</span>
+                  </div>
+                </Link>
+              );
+            })}
+
+            {/* Recent */}
+            {recentBirthdays.slice(0, 2).map((x) => {
+              const s = x.student;
+              const when = x.daysSince === 0 ? "Today" : `${x.daysSince}d ago`;
+
+              return (
+                <Link
+                  key={`re-${s.id}`}
+                  to={`/students/${s.id}`}
+                  className="text-decoration-none"
+                  style={{ color: "inherit" }}
+                >
+                  <div className="d-flex align-items-center justify-content-between gap-2 py-1">
+                    <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
+                      <Avatar seed={s.id ?? `${s.first_name}-${s.last_name}`} text={initialsFL(s)} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 650, fontSize: 13, lineHeight: 1.2 }}>
+                          {displayNameFL(s)}
+                        </div>
+                        <div className="text-muted" style={{ fontSize: 12 }}>
+                          {prettyMonthDay(x.month, x.day)} • {when}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-muted" style={{ fontSize: 12 }}>→</span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
-        </Link>
-      );
-    })}
-
-    {/* Recent */}
-    {recentBirthdays.slice(0, 2).map((x) => {
-      const s = x.student;
-      const when = x.daysSince === 0 ? "Today" : `${x.daysSince}d ago`;
-
-      return (
-        <Link
-          key={`re-${s.id}`}
-          to={`/students/${s.id}`}
-          className="text-decoration-none"
-          style={{ color: "inherit" }}
-        >
-          <div className="d-flex align-items-center justify-content-between gap-2 py-1">
-            <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
-              <Avatar seed={s.id ?? `${s.first_name}-${s.last_name}`} text={initialsFL(s)} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 650, fontSize: 13, lineHeight: 1.2 }}>
-                  {displayNameFL(s)}
-                </div>
-                <div className="text-muted" style={{ fontSize: 12 }}>
-                  {prettyMonthDay(x.month, x.day)} • {when}
-                </div>
-              </div>
-            </div>
-            <span className="text-muted" style={{ fontSize: 12 }}>→</span>
-          </div>
-        </Link>
-      );
-    })}
-  </div>
-)}
-
+        )}
 
         {/* Search */}
         <Form.Control
@@ -346,25 +348,24 @@ export default function MyStudentsCard({
                   </div>
 
                   <Link
-  to={`/students/${s.id}`}
-  className="text-decoration-none"
-  aria-label={`View ${displayNameFL(s)}`}
-  title="View"
-  style={{
-    width: 34,
-    height: 34,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "inherit",
-    background: "white"
-  }}
-  onMouseEnter={(e) => (e.currentTarget.style.background = "#f8f9fa")}
-  onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
->
-  <span className="text-muted" style={{ fontSize: 12 }}>→</span>
-</Link>
-
+                    to={`/students/${s.id}`}
+                    className="text-decoration-none"
+                    aria-label={`View ${displayNameFL(s)}`}
+                    title="View"
+                    style={{
+                      width: 34,
+                      height: 34,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "inherit",
+                      background: "white",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f8f9fa")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+                  >
+                    <span className="text-muted" style={{ fontSize: 12 }}>→</span>
+                  </Link>
                 </div>
               ))}
             </div>
