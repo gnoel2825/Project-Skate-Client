@@ -116,6 +116,9 @@ const birthdayMonthDay = (value) => {
   if (!m || !d) return null;
   return { month: m, day: d };
 };
+const birthdayBadgeCount =
+  Math.min(upcomingBirthdays.length, 3) + Math.min(recentBirthdays.length, 2);
+
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
@@ -250,7 +253,7 @@ export default function MyStudentsCard({
             <div className="d-flex justify-content-between align-items-center mb-2">
               <SectionKicker>Birthdays</SectionKicker>
               <Badge bg="light" text="dark" style={{ fontWeight: 700 }}>
-                {upcomingBirthdays.length + recentBirthdays.length}
+                {birthdayBadgeCount}
               </Badge>
             </div>
 
