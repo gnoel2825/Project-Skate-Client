@@ -1623,33 +1623,6 @@ class RosterShow extends Component {
                           <Link to={base}>{occ?.lesson_plan?.title || "Lesson Plan"}</Link>
 
                           <div className="mt-2 d-flex gap-2 flex-wrap">
-                            <Link
-                              to={`${base}#main`}
-                              className="btn btn-outline-primary rounded-pill px-3"
-                              style={{ fontSize: 12, minWidth: 84 }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              Main
-                            </Link>
-
-                            <Link
-                              to={`${base}#warmup`}
-                              className="btn btn-outline-primary rounded-pill px-3"
-                              style={{ fontSize: 12, minWidth: 84 }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              Warm-up
-                            </Link>
-
-                            <Link
-                              to={`${base}#cooldown`}
-                              className="btn btn-outline-primary rounded-pill px-3"
-                              style={{ fontSize: 12, minWidth: 84 }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              Cool-down
-                            </Link>
-
                             {occ.__source === "meeting" ? (
                               <Badge bg="light" text="dark" className="ms-2">
                                 one-off
