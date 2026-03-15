@@ -1,7 +1,6 @@
-// src/components/LessonPlanShow.js
 import React, { Component } from "react";
 import api from "../api";
-import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Card from "react-bootstrap/Card";
 import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
@@ -9,21 +8,45 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
-
-const API_BASE = process.env.REACT_APP_API_BASE_URL;
+import InputGroup from "react-bootstrap/InputGroup";
 
 function withParams(Component) {
   return (props) => {
     const params = useParams();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const rosterId = searchParams.get("roster_id"); // ✅
+    const rosterId = searchParams.get("roster_id");
     return <Component {...props} params={params} navigate={navigate} rosterId={rosterId} />;
   };
 }
 
-const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const BTN_CLASS = "rounded-pill px-3";
+const BTN_STYLE = { fontSize: 12 };
+
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const ROLE = {
+  MAIN: "main",
+  WARMUP: "warmup",
+  COOLDOWN: "cooldown",
+};
+
+const SectionKicker = ({ children, className = "", style = {} }) => (
+  <div
+    className={`text-uppercase text-muted ${className}`}
+    style={{ fontSize: 11, letterSpacing: 0.6, ...style }}
+  >
+    {children}
+  </div>
+);
+
+function coerceArray(resData) {
+  if (Array.isArray(resData)) return resData;
+  if (Array.isArray(resData?.rosters)) return resData.rosters;
+  if (Array.isArray(resData?.data)) return resData.data;
+  if (Array.isArray(resData?.items)) return resData.items;
+  return [];
+}
 
 function compactTime(value) {
   if (!value) return "";
@@ -84,23 +107,6 @@ function approxEqualMinutes(a, b, tolerance = 2) {
   return Math.abs(a - b) <= tolerance;
 }
 
-const SectionKicker = ({ children, className = "", style = {} }) => (
-  <div
-    className={`text-uppercase text-muted ${className}`}
-    style={{ fontSize: 11, letterSpacing: 0.6, ...style }}
-  >
-    {children}
-  </div>
-);
-
-function coerceArray(resData) {
-  if (Array.isArray(resData)) return resData;
-  if (Array.isArray(resData?.rosters)) return resData.rosters;
-  if (Array.isArray(resData?.data)) return resData.data;
-  if (Array.isArray(resData?.items)) return resData.items;
-  return [];
-}
-
 const formatDateShort = (yyyyMmDd) => {
   if (!yyyyMmDd) return "";
   const [y, m, d] = String(yyyyMmDd).split("-").map(Number);
@@ -108,7 +114,18 @@ const formatDateShort = (yyyyMmDd) => {
   return new Intl.DateTimeFormat(undefined, {
     weekday: "short",
     month: "short",
-    day: "numeric"
+    day: "numeric",
+  }).format(dt);
+};
+
+const formatDateLong = (value) => {
+  if (!value) return "";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   }).format(dt);
 };
 
@@ -137,20 +154,501 @@ function norm(s) {
   return String(s || "").toLowerCase().trim();
 }
 
+function safeMessage(err, fallback) {
+  return (
+    err?.response?.data?.errors?.join(", ") ||
+    err?.response?.data?.error ||
+    err?.message ||
+    fallback
+  );
+}
+
+function sortSkills(skills) {
+  return (skills || []).slice().sort((a, b) => {
+    const levelDiff = (a.level ?? 0) - (b.level ?? 0);
+    if (levelDiff !== 0) return levelDiff;
+    return norm(a.name).localeCompare(norm(b.name));
+  });
+}
+
+function occurrenceSignature(occ) {
+  return JSON.stringify({
+    id: String(occ?.id ?? ""),
+    taught_on: occ?.taught_on || "",
+    starts_at: occ?.starts_at || "",
+    ends_at: occ?.ends_at || "",
+    location: occ?.location || "",
+  });
+}
+
+function occurrenceListsEqual(a = [], b = []) {
+  if (a.length !== b.length) return false;
+
+  const aSorted = [...a].map(occurrenceSignature).sort();
+  const bSorted = [...b].map(occurrenceSignature).sort();
+
+  return aSorted.every((item, i) => item === bSorted[i]);
+}
+
+function makeTempOccurrenceId() {
+  return `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function skillIdsEqual(a = [], b = []) {
+  const aIds = a.map((s) => String(s.id)).sort();
+  const bIds = b.map((s) => String(s.id)).sort();
+  if (aIds.length !== bIds.length) return false;
+  return aIds.every((id, i) => id === bIds[i]);
+}
+
+function SectionEmpty({ children }) {
+  return (
+    <div
+      className="text-muted border rounded-3 p-3"
+      style={{ background: "#fbfbfd", borderColor: "#e9ecef", fontSize: 14 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SkillRow({ skill, removable, onRemove, disabled, isNew = false }) {
+  return (
+    <div
+      className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2 w-100"
+      style={{
+        background: isNew ? "#f3f8ff" : "#fff",
+        borderColor: isNew ? "#cfe2ff" : "#e9ecef",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 14, lineHeight: 1.35 }}>
+          <strong>Basic {skill.level}</strong> — {skill.name}
+        </div>
+
+        {isNew ? (
+          <div className="mt-1">
+            <Badge bg="primary" style={{ fontSize: 10 }}>
+              Unsaved
+            </Badge>
+          </div>
+        ) : null}
+      </div>
+
+      {removable ? (
+        <Button
+          size="sm"
+          variant="outline-danger"
+          className={`${BTN_CLASS} flex-shrink-0`}
+          style={BTN_STYLE}
+          onClick={onRemove}
+          disabled={disabled}
+        >
+          Remove
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function LessonSectionCard({
+  title,
+  role,
+  skills,
+  notes,
+  isEditing,
+  saving,
+  onNotesChange,
+  onRemoveSkill,
+  taughtIds,
+  onToggleTaught,
+  allSkills,
+  addSkillsOpen,
+  searchQuery,
+  onToggleAddSkillsOpen,
+  onSearchChange,
+  onClearSearch,
+  onToggleAddSkill,
+  onClearAddedSelections,
+  originalSkillIds,
+}) {
+  const hasNotes = Boolean((notes || "").trim());
+  const currentSkillIds = new Set((skills || []).map((s) => s.id));
+
+  const availableSkillsRaw = (allSkills || []).filter((s) => !currentSkillIds.has(s.id));
+  const q = norm(searchQuery);
+ const availableSkills = q
+  ? availableSkillsRaw.filter((s) => {
+      const name = norm(s?.name);
+      const level = String(s?.level ?? "");
+      const category = norm(s?.category);
+      const basicLabel = `basic ${level}`.trim();
+
+      return (
+        name.includes(q) ||
+        level.includes(q) ||
+        category.includes(q) ||
+        basicLabel.includes(q) ||
+        (q.includes("basic") && level.length > 0)
+      );
+    })
+  : availableSkillsRaw;
+
+  const availableByLevel = availableSkills.reduce((acc, s) => {
+    const lvl = s.level ?? 0;
+    acc[lvl] = acc[lvl] || [];
+    acc[lvl].push(s);
+    return acc;
+  }, {});
+
+  const levels = Object.keys(availableByLevel)
+    .map(Number)
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
+
+  return (
+    <Card className="mb-3 border-0 shadow-sm">
+      <Card.Body>
+        <div className="d-flex align-items-center gap-2 mb-3">
+          <SectionKicker>{title}</SectionKicker>
+          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+          <Badge bg="light" text="dark" className="border" style={{ fontSize: 11 }}>
+            {skills.length}
+          </Badge>
+        </div>
+
+        {isEditing ? (
+  <div className="mb-3">
+    <div className="d-flex justify-content-center">
+      <Button
+        size="sm"
+        className={BTN_CLASS}
+        style={BTN_STYLE}
+        variant={addSkillsOpen ? "secondary" : "outline-secondary"}
+        onClick={() => onToggleAddSkillsOpen(role)}
+        disabled={saving}
+        aria-expanded={addSkillsOpen}
+        aria-controls={`add-skills-panel-${role}`}
+      >
+        {addSkillsOpen ? "Hide" : "Add Skills"}
+      </Button>
+    </div>
+
+    {addSkillsOpen ? (
+      <div
+        id={`add-skills-panel-${role}`}
+        className="border rounded-3 p-3 mt-3"
+        style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
+      >
+        <div className="d-flex align-items-center gap-2 mb-3">
+          <SectionKicker>{title} Skill Builder</SectionKicker>
+          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+        </div>
+
+        <div className="mb-3">
+          <div className="fw-semibold mb-2" style={{ fontSize: 13 }}>
+            Search
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            <Form.Control
+              type="text"
+              placeholder={`Search skills for ${title.toLowerCase()}…`}
+              value={searchQuery}
+              onChange={(e) => onSearchChange(role, e.target.value)}
+              disabled={saving}
+              style={{ borderRadius: 12 }}
+            />
+            <Button
+              size="sm"
+              className={BTN_CLASS}
+              style={BTN_STYLE}
+              variant="outline-secondary"
+              onClick={() => onClearSearch(role)}
+              disabled={saving || !searchQuery}
+            >
+              Clear
+            </Button>
+          </div>
+
+          <div className="form-text mt-1">Search by name, level, or category.</div>
+        </div>
+
+        <div
+          className="border rounded-3 p-3"
+          style={{
+            background: "#fff",
+            borderColor: "#e9ecef",
+            minHeight: 180,
+          }}
+        >
+          {availableSkillsRaw.length === 0 ? (
+            <p className="text-muted mb-0">No more skills available to add.</p>
+          ) : levels.length === 0 ? (
+            <p className="text-muted mb-0">
+              {searchQuery ? "No matches for that search." : "No skills available to add."}
+            </p>
+          ) : (
+            <div
+              style={{
+                maxHeight: 280,
+                overflowY: "auto",
+                paddingRight: 4,
+              }}
+            >
+              {levels.map((lvl) => (
+                <div key={`${role}-level-${lvl}`} className="mb-3">
+                  <div className="fw-semibold mb-2">Basic {lvl}</div>
+
+                  {sortSkills(availableByLevel[lvl]).map((skill) => (
+                    <Form.Check
+                      key={`${role}-available-${skill.id}`}
+                      type="checkbox"
+                      id={`add-${role}-skill-${skill.id}`}
+                      label={skill.name}
+                      checked={(skills || []).some((s) => s.id === skill.id)}
+                      onChange={() => onToggleAddSkill(role, skill)}
+                      disabled={saving}
+                      className="mb-2"
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="d-flex gap-2 mt-3 flex-wrap">
+          <Button
+            size="sm"
+            className={BTN_CLASS}
+            style={BTN_STYLE}
+            variant="outline-secondary"
+            onClick={() => onClearAddedSelections(role, availableSkills)}
+            disabled={saving}
+          >
+            Undo
+          </Button>
+        </div>
+      </div>
+    ) : null}
+  </div>
+) : null}
+
+
+        <div className="mb-3">
+          <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+            Skills
+          </div>
+
+          {skills.length === 0 ? (
+            <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
+          ) : !isEditing ? (
+            <div className="d-grid" style={{ gap: 8 }}>
+              {sortSkills(skills).map((skill) => {
+                const checked = taughtIds.has(skill.id);
+
+                return (
+                  <div
+                    key={`${role}-view-${skill.id}`}
+                    className="border rounded-3 px-3 py-2"
+                    style={{
+                      background: checked ? "#f4f6f8" : "#fff",
+                      borderColor: checked ? "#d6dde3" : "#e9ecef",
+                      transition: "background-color 0.15s ease, border-color 0.15s ease",
+                    }}
+                  >
+                    <Form.Check
+                      type="checkbox"
+                      id={`${role}-taught-${skill.id}`}
+                      checked={checked}
+                      onChange={() => onToggleTaught(role, skill.id)}
+                      label={
+                        <span
+                          style={{
+                            fontSize: 14,
+                            textDecoration: checked ? "line-through" : "none",
+                            opacity: checked ? 0.68 : 1,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <strong>Basic {skill.level}</strong> — {skill.name}
+                        </span>
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+                    ) : (
+            <>
+              
+              {skills.length > 0 ? (
+                <div className="d-grid mb-3" style={{ gap: 8 }}>
+                  {skills.map((skill) => (
+                    <SkillRow
+                      key={`${role}-edit-${skill.id}`}
+                      skill={skill}
+                      removable
+                      disabled={saving}
+                      isNew={!originalSkillIds.has(skill.id)}
+                      onRemove={() => onRemoveSkill(role, skill.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
+              )}
+            </>
+          )}
+        </div>
+
+        <div>
+          <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+            Notes
+          </div>
+
+          {!isEditing ? (
+            hasNotes ? (
+              <div
+                className="border rounded-3 p-3"
+                style={{
+                  background: "#fcfcff",
+                  borderColor: "#e9ecef",
+                  whiteSpace: "pre-wrap",
+                  fontSize: 14,
+                  lineHeight: 1.45,
+                }}
+              >
+                {notes}
+              </div>
+            ) : (
+              <SectionEmpty>No notes added for this section.</SectionEmpty>
+            )
+          ) : (
+            <Form.Control
+              as="textarea"
+              rows={4}
+              value={notes || ""}
+              onChange={(e) => onNotesChange(e.target.value)}
+              disabled={saving}
+              placeholder={`Add notes for ${title.toLowerCase()}…`}
+              style={{ borderRadius: 12 }}
+            />
+          )}
+        </div>
+      </Card.Body>
+    </Card>
+  );
+}
+
+function UnsavedChangesModal({ show, saving, onSave, onDiscard, onKeepEditing }) {
+  if (!show) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="unsaved-changes-title"
+      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      style={{
+        background: "rgba(15, 23, 42, 0.28)",
+        zIndex: 1055,
+        padding: 16,
+      }}
+    >
+      <Card
+        className="border-0 shadow"
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          borderRadius: 18,
+        }}
+      >
+        <Card.Body className="p-4">
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <Badge bg="warning" text="dark">
+              Unsaved changes
+            </Badge>
+          </div>
+
+          <h2 id="unsaved-changes-title" className="h5 mb-2">
+            Save your changes before leaving?
+          </h2>
+
+          <p className="text-muted mb-4" style={{ fontSize: 14 }}>
+            You have edits that have not been saved yet. You can save them now,
+            discard them, or keep editing.
+          </p>
+
+          <div className="d-flex flex-wrap gap-2 justify-content-end">
+            <Button
+              size="sm"
+              className={BTN_CLASS}
+              style={BTN_STYLE}
+              variant="outline-secondary"
+              onClick={onKeepEditing}
+              disabled={saving}
+            >
+              Keep editing
+            </Button>
+
+            <Button
+              size="sm"
+              className={BTN_CLASS}
+              style={BTN_STYLE}
+              variant="outline-danger"
+              onClick={onDiscard}
+              disabled={saving}
+            >
+              Discard changes
+            </Button>
+
+            <Button
+              size="sm"
+              className={BTN_CLASS}
+              style={BTN_STYLE}
+              variant="primary"
+              onClick={onSave}
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Save changes"}
+            </Button>
+          </div>
+        </Card.Body>
+      </Card>
+    </div>
+  );
+}
+
 class LessonPlanShow extends Component {
   state = {
     lessonPlan: null,
     skills: [],
 
-    selectedSkillIdsByRole: {
+    draftSkillsByRole: {
+      main: [],
+      warmup: [],
+      cooldown: [],
+    },
+
+    taughtSkillIdsByRole: {
       main: new Set(),
       warmup: new Set(),
-      cooldown: new Set()
+      cooldown: new Set(),
     },
-    activeRole: "main",
 
-    // ✅ NEW: search query for "Add Skills" panel
-    skillSearch: "",
+    addSkillsOpenByRole: {
+      main: false,
+      warmup: false,
+      cooldown: false,
+    },
+
+    skillSearchByRole: {
+      main: "",
+      warmup: "",
+      cooldown: "",
+    },
 
     isEditing: false,
     title: "",
@@ -159,26 +657,159 @@ class LessonPlanShow extends Component {
     mainNotes: "",
     cooldownNotes: "",
 
+    draftOccurrences: [],
+    overviewDatesOpen: false,
+
     loading: true,
     saving: false,
     error: null,
     success: null,
 
+    duplicatedLessonPlanId: null,
+    duplicatedLessonPlanTitle: "",
+
     newTaughtOn: "",
     newStartsAt: "",
     newEndsAt: "",
     newLocation: "",
-    editingNotesRole: null,
 
     weeklyOverview: {},
     weeklyOverviewLoading: false,
-    weeklyOverviewError: null
+    weeklyOverviewError: null,
+
+    showUnsavedModal: false,
+    pendingNavigation: null,
   };
 
   componentDidMount() {
     this.loadPage();
     this.loadWeeklyOverview();
+    window.addEventListener("beforeunload", this.handleBeforeUnload);
   }
+
+  componentWillUnmount() {
+    window.removeEventListener("beforeunload", this.handleBeforeUnload);
+  }
+
+  handleBeforeUnload = (e) => {
+    if (!this.hasUnsavedChanges()) return;
+    e.preventDefault();
+    e.returnValue = "";
+  };
+
+  buildDraftSkillsFromLessonPlan = (lp) => ({
+    main: lp?.main_skills || lp?.skills || [],
+    warmup: lp?.warmup_skills || [],
+    cooldown: lp?.cooldown_skills || [],
+  });
+
+  buildDraftOccurrencesFromLessonPlan = (lp) =>
+    (lp?.lesson_plan_occurrences || []).map((occ) => ({
+      ...occ,
+      _isNew: false,
+    }));
+
+  hasUnsavedChanges = () => {
+    const { lessonPlan, isEditing } = this.state;
+    if (!isEditing || !lessonPlan) return false;
+
+    const originalMain = lessonPlan?.main_skills || lessonPlan?.skills || [];
+    const originalWarmup = lessonPlan?.warmup_skills || [];
+    const originalCooldown = lessonPlan?.cooldown_skills || [];
+
+    const titleChanged = (this.state.title || "") !== (lessonPlan.title || "");
+    const descriptionChanged = (this.state.description || "") !== (lessonPlan.description || "");
+    const warmupNotesChanged = (this.state.warmupNotes || "") !== (lessonPlan.warmup_notes || "");
+    const mainNotesChanged = (this.state.mainNotes || "") !== (lessonPlan.main_notes || "");
+    const cooldownNotesChanged = (this.state.cooldownNotes || "") !== (lessonPlan.cooldown_notes || "");
+
+    const occurrencesChanged = !occurrenceListsEqual(
+      this.state.draftOccurrences,
+      this.buildDraftOccurrencesFromLessonPlan(lessonPlan)
+    );
+
+    const mainSkillsChanged = !skillIdsEqual(this.state.draftSkillsByRole.main, originalMain);
+    const warmupSkillsChanged = !skillIdsEqual(this.state.draftSkillsByRole.warmup, originalWarmup);
+    const cooldownSkillsChanged = !skillIdsEqual(this.state.draftSkillsByRole.cooldown, originalCooldown);
+
+    return (
+      titleChanged ||
+      descriptionChanged ||
+      warmupNotesChanged ||
+      mainNotesChanged ||
+      cooldownNotesChanged ||
+      mainSkillsChanged ||
+      warmupSkillsChanged ||
+      cooldownSkillsChanged ||
+      occurrencesChanged
+    );
+  };
+
+  requestNavigation = (fn) => {
+    if (this.hasUnsavedChanges()) {
+      this.setState({
+        showUnsavedModal: true,
+        pendingNavigation: fn,
+      });
+      return;
+    }
+    fn();
+  };
+
+  continuePendingNavigation = () => {
+    const fn = this.state.pendingNavigation;
+    this.setState({ showUnsavedModal: false, pendingNavigation: null }, () => {
+      if (typeof fn === "function") fn();
+    });
+  };
+
+  discardChangesAndContinue = () => {
+    const lp = this.state.lessonPlan;
+    this.setState(
+      {
+        isEditing: false,
+        title: lp?.title || "",
+        description: lp?.description || "",
+        warmupNotes: lp?.warmup_notes || "",
+        mainNotes: lp?.main_notes || "",
+        cooldownNotes: lp?.cooldown_notes || "",
+        draftSkillsByRole: this.buildDraftSkillsFromLessonPlan(lp),
+        draftOccurrences: this.buildDraftOccurrencesFromLessonPlan(lp),
+        addSkillsOpenByRole: {
+          main: false,
+          warmup: false,
+          cooldown: false,
+        },
+        skillSearchByRole: {
+          main: "",
+          warmup: "",
+          cooldown: "",
+        },
+        error: null,
+        success: null,
+        duplicatedLessonPlanId: null,
+        duplicatedLessonPlanTitle: "",
+        showUnsavedModal: false,
+      },
+      this.continuePendingNavigation
+    );
+  };
+
+  saveChangesAndContinue = async () => {
+    const ok = await this.saveLessonPlan();
+    if (ok) this.continuePendingNavigation();
+  };
+
+  scrollToSection = (sectionId) => {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    window.setTimeout(() => {
+      if (typeof el.focus === "function") el.focus();
+    }, 250);
+  };
 
   loadPage = () => {
     const { id } = this.props.params;
@@ -186,12 +817,15 @@ class LessonPlanShow extends Component {
 
     const lpParams = rosterId ? { roster_id: rosterId } : undefined;
 
-    this.setState({ loading: true, error: null, success: null });
+    this.setState({
+      loading: true,
+      error: null,
+      success: null,
+      duplicatedLessonPlanId: null,
+      duplicatedLessonPlanTitle: "",
+    });
 
-    Promise.all([
-      api.get(`/lesson_plans/${id}`, { params: lpParams }),
-      api.get(`/skills`)
-    ])
+    Promise.all([api.get(`/lesson_plans/${id}`, { params: lpParams }), api.get(`/skills`)])
       .then(([lpRes, skillsRes]) => {
         const lp = lpRes.data;
 
@@ -203,66 +837,150 @@ class LessonPlanShow extends Component {
           warmupNotes: lp.warmup_notes || "",
           mainNotes: lp.main_notes || "",
           cooldownNotes: lp.cooldown_notes || "",
+          draftSkillsByRole: this.buildDraftSkillsFromLessonPlan(lp),
+          draftOccurrences: this.buildDraftOccurrencesFromLessonPlan(lp),
           loading: false,
-          saving: false
+          saving: false,
         });
       })
       .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") ||
-          err.response?.data?.error ||
-          err.message ||
-          "Failed to load lesson plan";
-        this.setState({ error: msg, loading: false, saving: false });
+        this.setState({
+          error: safeMessage(err, "Failed to load lesson plan"),
+          loading: false,
+          saving: false,
+        });
       });
   };
 
-  startEdit = () =>
-    this.setState({
-      isEditing: true,
-      editingNotesRole: this.state.editingNotesRole || "main",
-      activeRole: this.state.activeRole || "main",
-      success: null,
-      error: null
-    });
-
-  startEditNotes = (roleKey) =>
-    this.setState({
-      isEditing: true,
-      editingNotesRole: roleKey,
-      activeRole: roleKey,
-      success: null,
-      error: null
-    });
-
-  setEditingNotesRole = (roleKey) =>
-    this.setState({
-      editingNotesRole: roleKey,
-      activeRole: roleKey
-    });
-
-  cancelEdit = () => {
+  startEdit = () => {
     const lp = this.state.lessonPlan;
     this.setState({
-      isEditing: false,
-      editingNotesRole: null,
+      isEditing: true,
+      success: null,
+      error: null,
+      duplicatedLessonPlanId: null,
+      duplicatedLessonPlanTitle: "",
       title: lp?.title || "",
       description: lp?.description || "",
       warmupNotes: lp?.warmup_notes || "",
       mainNotes: lp?.main_notes || "",
       cooldownNotes: lp?.cooldown_notes || "",
-      // ✅ reset add-skill search when leaving edit mode
-      skillSearch: "",
-      success: null,
-      error: null
+      draftSkillsByRole: this.buildDraftSkillsFromLessonPlan(lp),
+      draftOccurrences: this.buildDraftOccurrencesFromLessonPlan(lp),
+      addSkillsOpenByRole: {
+        main: false,
+        warmup: false,
+        cooldown: false,
+      },
+      skillSearchByRole: {
+        main: "",
+        warmup: "",
+        cooldown: "",
+      },
+    });
+  };
+
+  cancelEdit = () => {
+    this.requestNavigation(() => {
+      const lp = this.state.lessonPlan;
+      this.setState({
+        isEditing: false,
+        title: lp?.title || "",
+        description: lp?.description || "",
+        warmupNotes: lp?.warmup_notes || "",
+        mainNotes: lp?.main_notes || "",
+        cooldownNotes: lp?.cooldown_notes || "",
+        draftSkillsByRole: this.buildDraftSkillsFromLessonPlan(lp),
+        draftOccurrences: this.buildDraftOccurrencesFromLessonPlan(lp),
+        addSkillsOpenByRole: {
+          main: false,
+          warmup: false,
+          cooldown: false,
+        },
+        skillSearchByRole: {
+          main: "",
+          warmup: "",
+          cooldown: "",
+        },
+        success: null,
+        error: null,
+        duplicatedLessonPlanId: null,
+        duplicatedLessonPlanTitle: "",
+      });
     });
   };
 
   handleFieldChange = (e) => this.setState({ [e.target.name]: e.target.value });
 
-  saveLessonPlan = () => {
+  toggleAddSkillsOpen = (role) => {
+    this.setState((prev) => ({
+      addSkillsOpenByRole: {
+        ...prev.addSkillsOpenByRole,
+        [role]: !prev.addSkillsOpenByRole[role],
+      },
+    }));
+  };
+
+  changeSkillSearch = (role, value) => {
+    this.setState((prev) => ({
+      skillSearchByRole: {
+        ...prev.skillSearchByRole,
+        [role]: value,
+      },
+    }));
+  };
+
+  clearSkillSearch = (role) => {
+    this.setState((prev) => ({
+      skillSearchByRole: {
+        ...prev.skillSearchByRole,
+        [role]: "",
+      },
+    }));
+  };
+
+  duplicateLessonPlan = async () => {
     const { id } = this.props.params;
-    const { title, description, warmupNotes, mainNotes, cooldownNotes } = this.state;
+
+    this.setState({
+      saving: true,
+      error: null,
+      success: null,
+      duplicatedLessonPlanId: null,
+      duplicatedLessonPlanTitle: "",
+    });
+
+    try {
+      const res = await api.post(`/lesson_plans/${id}/duplicate`);
+      const duplicated = res.data;
+
+      this.setState({
+        saving: false,
+        success: "Lesson plan duplicated!",
+        duplicatedLessonPlanId: duplicated?.id || null,
+        duplicatedLessonPlanTitle: duplicated?.title || "",
+      });
+    } catch (err) {
+      this.setState({
+        saving: false,
+        error: safeMessage(err, "Failed to duplicate lesson plan"),
+        duplicatedLessonPlanId: null,
+        duplicatedLessonPlanTitle: "",
+      });
+    }
+  };
+
+  saveLessonPlan = async () => {
+    const { id } = this.props.params;
+    const {
+      lessonPlan,
+      title,
+      description,
+      warmupNotes,
+      mainNotes,
+      cooldownNotes,
+      draftSkillsByRole,
+    } = this.state;
 
     const payload = {
       lesson_plan: {
@@ -270,85 +988,204 @@ class LessonPlanShow extends Component {
         description: (description || "").trim(),
         warmup_notes: (warmupNotes ?? "").trim() || null,
         main_notes: (mainNotes ?? "").trim() || null,
-        cooldown_notes: (cooldownNotes ?? "").trim() || null
-      }
+        cooldown_notes: (cooldownNotes ?? "").trim() || null,
+      },
     };
 
-    this.setState({ saving: true, error: null, success: null });
+    const original = {
+      main: lessonPlan?.main_skills || lessonPlan?.skills || [],
+      warmup: lessonPlan?.warmup_skills || [],
+      cooldown: lessonPlan?.cooldown_skills || [],
+    };
 
-    api
-      .patch(`/lesson_plans/${id}`, payload)
-      .then((res) => {
-        const updated = res.data?.lesson_plan ?? res.data;
+    const originalIds = {
+      main: new Set(original.main.map((s) => s.id)),
+      warmup: new Set(original.warmup.map((s) => s.id)),
+      cooldown: new Set(original.cooldown.map((s) => s.id)),
+    };
 
-        this.setState((prev) => ({
-          lessonPlan: { ...prev.lessonPlan, ...updated },
-          warmupNotes: updated?.warmup_notes ?? prev.warmupNotes,
-          mainNotes: updated?.main_notes ?? prev.mainNotes,
-          cooldownNotes: updated?.cooldown_notes ?? prev.cooldownNotes,
-          isEditing: false,
-          editingNotesRole: null,
-          skillSearch: "",
-          saving: false,
-          success: "Lesson plan updated!"
-        }));
-      })
-      .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") ||
-          err.response?.data?.error ||
-          err.message ||
-          "Failed to update lesson plan";
-        this.setState({ error: msg, saving: false });
+    const draftIds = {
+      main: new Set((draftSkillsByRole.main || []).map((s) => s.id)),
+      warmup: new Set((draftSkillsByRole.warmup || []).map((s) => s.id)),
+      cooldown: new Set((draftSkillsByRole.cooldown || []).map((s) => s.id)),
+    };
+
+    const removedByRole = {
+      main: [...originalIds.main].filter((id) => !draftIds.main.has(id)),
+      warmup: [...originalIds.warmup].filter((id) => !draftIds.warmup.has(id)),
+      cooldown: [...originalIds.cooldown].filter((id) => !draftIds.cooldown.has(id)),
+    };
+
+    const addedByRole = {
+      main: [...draftIds.main].filter((id) => !originalIds.main.has(id)),
+      warmup: [...draftIds.warmup].filter((id) => !originalIds.warmup.has(id)),
+      cooldown: [...draftIds.cooldown].filter((id) => !originalIds.cooldown.has(id)),
+    };
+
+    const originalOccurrences = this.buildDraftOccurrencesFromLessonPlan(lessonPlan);
+    const draftOccurrences = this.state.draftOccurrences || [];
+
+    const originalOccurrenceIds = new Set(
+      originalOccurrences
+        .filter((occ) => !String(occ.id).startsWith("temp-"))
+        .map((occ) => String(occ.id))
+    );
+
+    const keptPersistedOccurrenceIds = new Set(
+      draftOccurrences
+        .filter((occ) => !String(occ.id).startsWith("temp-"))
+        .map((occ) => String(occ.id))
+    );
+
+    const removedOccurrenceIds = [...originalOccurrenceIds].filter(
+      (id) => !keptPersistedOccurrenceIds.has(id)
+    );
+
+    const newOccurrences = draftOccurrences.filter(
+      (occ) => String(occ.id).startsWith("temp-") || occ._isNew
+    );
+
+    this.setState({
+      saving: true,
+      error: null,
+      success: null,
+      duplicatedLessonPlanId: null,
+      duplicatedLessonPlanTitle: "",
+    });
+
+    try {
+      await api.patch(`/lesson_plans/${id}`, payload);
+
+      for (const skillId of removedByRole.main) {
+        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "main" } });
+      }
+      for (const skillId of removedByRole.warmup) {
+        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "warmup" } });
+      }
+      for (const skillId of removedByRole.cooldown) {
+        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "cooldown" } });
+      }
+
+      if (addedByRole.main.length) {
+        await api.post(`/lesson_plans/${id}/add_skills`, {
+          skill_ids: addedByRole.main,
+          role: "main",
+        });
+      }
+      if (addedByRole.warmup.length) {
+        await api.post(`/lesson_plans/${id}/add_skills`, {
+          skill_ids: addedByRole.warmup,
+          role: "warmup",
+        });
+      }
+      if (addedByRole.cooldown.length) {
+        await api.post(`/lesson_plans/${id}/add_skills`, {
+          skill_ids: addedByRole.cooldown,
+          role: "cooldown",
+        });
+      }
+
+      for (const occurrenceId of removedOccurrenceIds) {
+        await api.delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`);
+      }
+
+      for (const occ of newOccurrences) {
+        await api.post(`/lesson_plans/${id}/lesson_plan_occurrences`, {
+          lesson_plan_occurrence: {
+            taught_on: occ.taught_on,
+            starts_at: occ.starts_at || null,
+            ends_at: occ.ends_at || null,
+            location: occ.location || null,
+          },
+        });
+      }
+
+      const refreshed = await api.get(`/lesson_plans/${id}`, {
+        params: this.props.rosterId ? { roster_id: this.props.rosterId } : undefined,
       });
+      const updated = refreshed.data;
+
+      this.setState({
+        lessonPlan: updated,
+        title: updated.title || "",
+        description: updated.description || "",
+        warmupNotes: updated.warmup_notes || "",
+        mainNotes: updated.main_notes || "",
+        cooldownNotes: updated.cooldown_notes || "",
+        draftSkillsByRole: this.buildDraftSkillsFromLessonPlan(updated),
+        draftOccurrences: this.buildDraftOccurrencesFromLessonPlan(updated),
+        isEditing: false,
+        addSkillsOpenByRole: {
+          main: false,
+          warmup: false,
+          cooldown: false,
+        },
+        skillSearchByRole: {
+          main: "",
+          warmup: "",
+          cooldown: "",
+        },
+        saving: false,
+        success: "Lesson plan updated!",
+      });
+
+      return true;
+    } catch (err) {
+      this.setState({
+        error: safeMessage(err, "Failed to update lesson plan"),
+        saving: false,
+      });
+      return false;
+    }
   };
 
   removeSkill = (role, skillId) => {
-    const { id } = this.props.params;
-
-    this.setState({ saving: true, error: null, success: null });
-
-    api
-      .delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role } })
-      .then(() => this.loadPage())
-      .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") || err.message || "Failed to remove skill";
-        this.setState({ error: msg, saving: false });
-      });
+    this.setState((prev) => ({
+      draftSkillsByRole: {
+        ...prev.draftSkillsByRole,
+        [role]: (prev.draftSkillsByRole[role] || []).filter((s) => s.id !== skillId),
+      },
+      success: null,
+      error: null,
+    }));
   };
 
-  toggleAddSkill = (role, skillId) => {
+  toggleAddSkill = (role, skill) => {
     this.setState((prev) => {
-      const next = { ...prev.selectedSkillIdsByRole };
+      const current = prev.draftSkillsByRole[role] || [];
+      const exists = current.some((s) => s.id === skill.id);
+
+      return {
+        draftSkillsByRole: {
+          ...prev.draftSkillsByRole,
+          [role]: exists ? current.filter((s) => s.id !== skill.id) : [...current, skill],
+        },
+        success: null,
+        error: null,
+      };
+    });
+  };
+
+  clearAddedSelections = (role, availableSkills) => {
+    const availableIds = new Set((availableSkills || []).map((s) => s.id));
+
+    this.setState((prev) => ({
+      draftSkillsByRole: {
+        ...prev.draftSkillsByRole,
+        [role]: (prev.draftSkillsByRole[role] || []).filter((s) => !availableIds.has(s.id)),
+      },
+    }));
+  };
+
+  toggleTaught = (role, skillId) => {
+    this.setState((prev) => {
+      const next = { ...prev.taughtSkillIdsByRole };
       const setCopy = new Set(next[role]);
       if (setCopy.has(skillId)) setCopy.delete(skillId);
       else setCopy.add(skillId);
       next[role] = setCopy;
-      return { selectedSkillIdsByRole: next };
+      return { taughtSkillIdsByRole: next };
     });
-  };
-
-  addSelectedSkills = (role) => {
-    const { id } = this.props.params;
-    const skillIds = Array.from(this.state.selectedSkillIdsByRole[role] || []);
-    if (skillIds.length === 0) return;
-
-    this.setState({ saving: true, error: null, success: null });
-
-    api
-      .post(`/lesson_plans/${id}/add_skills`, { skill_ids: skillIds, role })
-      .then(() => {
-        this.setState((prev) => ({
-          selectedSkillIdsByRole: { ...prev.selectedSkillIdsByRole, [role]: new Set() }
-        }));
-        return this.loadPage();
-      })
-      .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") || err.message || "Failed to add skills";
-        this.setState({ error: msg, saving: false });
-      });
   };
 
   handleOccFieldChange = (e) => {
@@ -358,55 +1195,41 @@ class LessonPlanShow extends Component {
   createOccurrence = (e) => {
     e.preventDefault();
 
-    const { id } = this.props.params;
     const { newTaughtOn, newStartsAt, newEndsAt, newLocation } = this.state;
 
-    this.setState({ saving: true, error: null, success: null });
+    if (!newTaughtOn) {
+      this.setState({ error: "Please choose a date." });
+      return;
+    }
 
-    api
-      .post(`/lesson_plans/${id}/lesson_plan_occurrences`, {
-        lesson_plan_occurrence: {
-          taught_on: newTaughtOn,
-          starts_at: newStartsAt || null,
-          ends_at: newEndsAt || null,
-          location: newLocation.trim() || null
-        }
-      })
-      .then(() => {
-        this.setState({
-          newTaughtOn: "",
-          newStartsAt: "",
-          newEndsAt: "",
-          newLocation: "",
-          success: "Scheduled date added!",
-          saving: false
-        });
-        return this.loadPage();
-      })
-      .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") || err.message || "Failed to schedule date";
-        this.setState({ error: msg, saving: false });
-      });
+    const draftOccurrence = {
+      id: makeTempOccurrenceId(),
+      taught_on: newTaughtOn,
+      starts_at: newStartsAt || null,
+      ends_at: newEndsAt || null,
+      location: newLocation.trim() || null,
+      _isNew: true,
+    };
+
+    this.setState((prev) => ({
+      draftOccurrences: [...prev.draftOccurrences, draftOccurrence],
+      newTaughtOn: "",
+      newStartsAt: "",
+      newEndsAt: "",
+      newLocation: "",
+      error: null,
+      success: "Scheduled date added. Save changes to keep it.",
+    }));
   };
 
   deleteOccurrence = (occurrenceId) => {
-    const { id } = this.props.params;
     if (!window.confirm("Remove this scheduled date?")) return;
 
-    this.setState({ saving: true, error: null, success: null });
-
-    api
-      .delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`)
-      .then(() => {
-        this.setState({ saving: false, success: "Scheduled date removed." });
-        this.loadPage();
-      })
-      .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") || err.message || "Failed to remove scheduled date";
-        this.setState({ error: msg, saving: false });
-      });
+    this.setState((prev) => ({
+      draftOccurrences: (prev.draftOccurrences || []).filter((occ) => occ.id !== occurrenceId),
+      success: null,
+      error: null,
+    }));
   };
 
   deleteLessonPlan = () => {
@@ -419,105 +1242,11 @@ class LessonPlanShow extends Component {
       .delete(`/lesson_plans/${id}`)
       .then(() => this.props.navigate("/lesson-plans"))
       .catch((err) => {
-        const msg =
-          err.response?.data?.errors?.join(", ") ||
-          err.response?.data?.error ||
-          err.message ||
-          "Failed to delete lesson plan";
-        this.setState({ error: msg, saving: false });
+        this.setState({
+          error: safeMessage(err, "Failed to delete lesson plan"),
+          saving: false,
+        });
       });
-  };
-
-  renderNotesDisplay = (roleKey, label) => {
-    const { lessonPlan, isEditing, editingNotesRole } = this.state;
-
-    const value =
-      roleKey === "warmup"
-        ? isEditing
-          ? this.state.warmupNotes
-          : lessonPlan?.warmup_notes
-        : roleKey === "cooldown"
-        ? isEditing
-          ? this.state.cooldownNotes
-          : lessonPlan?.cooldown_notes
-        : isEditing
-        ? this.state.mainNotes
-        : lessonPlan?.main_notes;
-
-    if (isEditing && (editingNotesRole || "main") === roleKey) return null;
-    const hasNotes = Boolean((value || "").trim());
-
-    return (
-      <div className="mt-3">
-        <div className="d-flex align-items-center gap-2 mb-2">
-          <div className="text-uppercase text-muted" style={{ fontSize: 11, letterSpacing: 0.6 }}>
-            Notes
-          </div>
-          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-        </div>
-
-        {hasNotes ? (
-          <div
-            className="border rounded-3 p-2"
-            style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
-          >
-            <div className="d-flex align-items-start gap-2">
-              <div
-                aria-hidden="true"
-                className="rounded-2"
-                style={{
-                  width: 10,
-                  height: 10,
-                  marginTop: 5,
-                  background: "#dee2e6",
-                  flex: "0 0 auto"
-                }}
-              />
-              <div style={{ fontSize: 14, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>{value}</div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  };
-
-  renderNotesBlock = (roleKey, label) => {
-    const { isEditing, saving, editingNotesRole } = this.state;
-    if (!isEditing) return null;
-    if ((editingNotesRole || "main") !== roleKey) return null;
-
-    const value =
-      roleKey === "warmup"
-        ? this.state.warmupNotes
-        : roleKey === "cooldown"
-        ? this.state.cooldownNotes
-        : this.state.mainNotes;
-
-    const name =
-      roleKey === "warmup" ? "warmupNotes" : roleKey === "cooldown" ? "cooldownNotes" : "mainNotes";
-
-    return (
-      <Form.Group className="mt-3">
-        <div className="d-flex align-items-center gap-2 mb-2">
-          <div className="text-uppercase text-muted" style={{ fontSize: 11, letterSpacing: 0.6 }}>
-            Notes (editing)
-          </div>
-          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-        </div>
-
-        <Form.Control
-          as="textarea"
-          rows={4}
-          name={name}
-          value={value || ""}
-          onChange={this.handleFieldChange}
-          disabled={saving}
-          placeholder={`Add notes for ${label.toLowerCase()}…`}
-          style={{ borderRadius: 12 }}
-        />
-        <div className="form-text">Tip: keep this to cues, reminders, and custom skills you’re teaching.</div>
-      </Form.Group>
-    );
   };
 
   getMatchingWeeklyRostersForOccurrence = (occ) => {
@@ -613,12 +1342,10 @@ class LessonPlanShow extends Component {
 
       this.setState({ weeklyOverview: grouped, weeklyOverviewLoading: false });
     } catch (err) {
-      const msg =
-        err.response?.data?.errors?.join(", ") ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to load weekly overview";
-      this.setState({ weeklyOverviewError: msg, weeklyOverviewLoading: false });
+      this.setState({
+        weeklyOverviewError: safeMessage(err, "Failed to load weekly overview"),
+        weeklyOverviewLoading: false,
+      });
     }
   };
 
@@ -626,15 +1353,19 @@ class LessonPlanShow extends Component {
     const {
       lessonPlan,
       skills,
-      selectedSkillIdsByRole,
-      activeRole,
+      draftSkillsByRole,
+      taughtSkillIdsByRole,
       isEditing,
       title,
       description,
       loading,
       saving,
       error,
-      success
+      success,
+      showUnsavedModal,
+      addSkillsOpenByRole,
+      skillSearchByRole,
+      duplicatedLessonPlanId,
     } = this.state;
 
     if (loading) return <p className="m-4">Loading lesson plan…</p>;
@@ -647,704 +1378,770 @@ class LessonPlanShow extends Component {
       );
     }
 
-    const mainSkills = lessonPlan?.main_skills || lessonPlan?.skills || [];
-    const warmupSkills = lessonPlan?.warmup_skills || [];
-    const cooldownSkills = lessonPlan?.cooldown_skills || [];
+    const originalMainSkills = lessonPlan?.main_skills || lessonPlan?.skills || [];
+    const originalWarmupSkills = lessonPlan?.warmup_skills || [];
+    const originalCooldownSkills = lessonPlan?.cooldown_skills || [];
+
+    const mainSkills = isEditing ? draftSkillsByRole.main : originalMainSkills;
+    const warmupSkills = isEditing ? draftSkillsByRole.warmup : originalWarmupSkills;
+    const cooldownSkills = isEditing ? draftSkillsByRole.cooldown : originalCooldownSkills;
     const occurrences = lessonPlan?.lesson_plan_occurrences || [];
+    const draftOccurrences = this.state.draftOccurrences || [];
 
-    const role = activeRole;
-    const selectedSet = selectedSkillIdsByRole?.[role] || new Set();
+    const hasUnsaved = this.hasUnsavedChanges();
 
-    const roleSkills = role === "main" ? mainSkills : role === "warmup" ? warmupSkills : cooldownSkills;
-    const roleSkillIds = new Set(roleSkills.map((s) => s.id));
-
-    // available skills for CURRENT role (still excludes already-added skills)
-    const availableSkillsRaw = (skills || []).filter((s) => !roleSkillIds.has(s.id));
-
-    // ✅ NEW: apply search filter before grouping
-    const q = norm(this.state.skillSearch);
-    const availableSkills = q
-      ? availableSkillsRaw.filter((s) => {
-          const name = norm(s?.name);
-          const level = String(s?.level ?? "");
-          const category = norm(s?.category);
-          return name.includes(q) || level.includes(q) || category.includes(q);
-        })
-      : availableSkillsRaw;
-
-    const availableByLevel = availableSkills.reduce((acc, s) => {
-      const lvl = s.level ?? 0;
-      acc[lvl] = acc[lvl] || [];
-      acc[lvl].push(s);
-      return acc;
-    }, {});
-
-    const levels = Object.keys(availableByLevel)
-      .map(Number)
-      .filter((n) => n > 0)
-      .sort((a, b) => a - b);
-
-    const roleLabel = activeRole === "warmup" ? "Warm-up" : activeRole === "cooldown" ? "Cool-down" : "Main";
+    const tocItems = [
+      { id: "lesson-overview", label: "Overview" },
+      { id: "section-warmup", label: `Warm-up (${warmupSkills.length})` },
+      { id: "section-main", label: `Main Lesson (${mainSkills.length})` },
+      { id: "section-cooldown", label: `Cool-down (${cooldownSkills.length})` },
+      ...(isEditing ? [{ id: "section-scheduler", label: `Scheduler (${draftOccurrences.length})` }] : []),
+    ];
 
     return (
-      <div className="container mt-4" style={{ maxWidth: 1000 }}>
-        {success && <Alert variant="success">{success}</Alert>}
-        {error && <Alert variant="danger">{error}</Alert>}
+      <>
+        <div className="container mt-4" style={{ maxWidth: 1100 }}>
+          {success && (
+            <Alert variant="success" className="mb-3">
+              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>{success}</div>
 
-        {/* Header / Details */}
-        <Card className="mb-4">
-          <Card.Body>
-            <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-              <div style={{ flex: 1, minWidth: 260 }}>
-                {!isEditing ? (
-                  <>
-                    <Card.Title className="mb-1">{lessonPlan.title}</Card.Title>
-                    {lessonPlan.description ? (
-                      <Card.Text className="text-muted">{lessonPlan.description}</Card.Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <Form.Group className="mb-2">
-                      <Form.Label>Title</Form.Label>
-                      <Form.Control
-                        name="title"
-                        value={title}
-                        onChange={this.handleFieldChange}
-                        disabled={saving}
-                      />
-                    </Form.Group>
-
-                    <Form.Group className="mb-2">
-                      <Form.Label>Description</Form.Label>
-                      <Form.Control
-                        as="textarea"
-                        rows={3}
-                        name="description"
-                        value={description}
-                        onChange={this.handleFieldChange}
-                        disabled={saving}
-                      />
-                    </Form.Group>
-                  </>
-                )}
-              </div>
-
-              <div className="d-flex gap-2 flex-wrap">
-                {!isEditing ? (
-                  <>
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  {duplicatedLessonPlanId ? (
                     <Button
                       size="sm"
-                      className="rounded-pill px-3"
-                      variant="primary"
-                      style={{ fontSize: 12 }}
-                      onClick={this.startEdit}
+                      className={BTN_CLASS}
+                      style={BTN_STYLE}
+                      variant="outline-success"
+                      onClick={() => this.props.navigate(`/lesson-plans/${duplicatedLessonPlanId}`)}
                     >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="rounded-pill px-3"
-                      variant="danger"
-                      style={{ fontSize: 12 }}
-                      onClick={this.deleteLessonPlan}
-                      disabled={saving}
-                    >
-                      Delete
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="primary" onClick={this.saveLessonPlan} disabled={saving}>
-                      {saving ? "Saving..." : "Save"}
-                    </Button>
-                    <Button variant="outline-secondary" onClick={this.cancelEdit} disabled={saving}>
-                      Cancel
-                    </Button>
-                    <Button variant="outline-danger" onClick={this.deleteLessonPlan} disabled={saving}>
-                      Delete
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </Card.Body>
-        </Card>
-
-        <Row>
-          {/* Skills (left) */}
-          <Col md={isEditing ? 6 : 12} className="mb-4">
-            {/* Warm-up */}
-            <Card className="mb-3">
-              <Card.Body>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <SectionKicker>Warm-up</SectionKicker>
-                  <Badge bg="secondary">{warmupSkills.length}</Badge>
-                  <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-                  {isEditing ? (
-                    <Button
-                      size="sm"
-                      variant={(this.state.editingNotesRole || "main") === "warmup" ? "primary" : "outline-secondary"}
-                      onClick={() => this.setEditingNotesRole("warmup")}
-                      disabled={saving}
-                      className="rounded-pill px-3"
-                    >
-                      Edit notes
+                      Open Duplicate
                     </Button>
                   ) : null}
-                </div>
 
-                {warmupSkills.length === 0 ? (
-                  <p className="text-muted mb-0 mt-3">No warm-up skills yet.</p>
-                ) : (
-                  <ul className="mt-3">
-                    {warmupSkills
-                      .slice()
-                      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
-                      .map((skill) => (
-                        <li
-                          key={skill.id}
-                          className="mb-2 d-flex justify-content-between align-items-start gap-2"
-                        >
-                          <span>
-                            <strong>Basic {skill.level}</strong> — {skill.name}
-                          </span>
-                          <Button
-                            size="sm"
-                            className="rounded-pill px-3"
-                            variant="outline-danger"
-                            style={{ fontSize: 12 }}
-                            onClick={() => this.removeSkill("warmup", skill.id)}
-                            disabled={saving}
-                          >
-                            Remove
-                          </Button>
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                {this.renderNotesDisplay("warmup", "Warm-up")}
-                {this.renderNotesBlock("warmup", "Warm-up")}
-              </Card.Body>
-            </Card>
-
-            {/* Main */}
-            <Card className="mb-3">
-              <Card.Body>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <SectionKicker>Main lesson</SectionKicker>
-                  <Badge bg="secondary">{mainSkills.length}</Badge>
-                  <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-                  {isEditing ? (
-                    <Button
-                      size="sm"
-                      variant={(this.state.editingNotesRole || "main") === "main" ? "primary" : "outline-secondary"}
-                      onClick={() => this.setEditingNotesRole("main")}
-                      disabled={saving}
-                      className="rounded-pill px-3"
-                    >
-                      Edit notes
-                    </Button>
-                  ) : null}
-                </div>
-
-                {mainSkills.length === 0 ? (
-                  <p className="text-muted mb-0 mt-3">No skills added yet.</p>
-                ) : (
-                  <ul className="mt-3">
-                    {mainSkills
-                      .slice()
-                      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
-                      .map((skill) => (
-                        <li
-                          key={skill.id}
-                          className="mb-2 d-flex justify-content-between align-items-start gap-2"
-                        >
-                          <span>
-                            <strong>Basic {skill.level}</strong> — {skill.name}
-                          </span>
-                          <Button
-                            size="sm"
-                            className="rounded-pill px-3"
-                            variant="outline-danger"
-                            style={{ fontSize: 12 }}
-                            onClick={() => this.removeSkill("main", skill.id)}
-                            disabled={saving}
-                          >
-                            Remove
-                          </Button>
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                {this.renderNotesDisplay("main", "Main lesson")}
-                {this.renderNotesBlock("main", "Main lesson")}
-              </Card.Body>
-            </Card>
-
-            {/* Cool-down */}
-            <Card>
-              <Card.Body>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <SectionKicker>Cool-down</SectionKicker>
-                  <Badge bg="secondary">{cooldownSkills.length}</Badge>
-                  <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-                  {isEditing ? (
-                    <Button
-                      size="sm"
-                      variant={
-                        (this.state.editingNotesRole || "main") === "cooldown" ? "primary" : "outline-secondary"
-                      }
-                      onClick={() => this.setEditingNotesRole("cooldown")}
-                      disabled={saving}
-                      className="rounded-pill px-3"
-                    >
-                      Edit notes
-                    </Button>
-                  ) : null}
-                </div>
-
-                {cooldownSkills.length === 0 ? (
-                  <p className="text-muted mb-0 mt-3">No cool-down skills yet.</p>
-                ) : (
-                  <ul className="mt-3">
-                    {cooldownSkills
-                      .slice()
-                      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
-                      .map((skill) => (
-                        <li
-                          key={skill.id}
-                          className="mb-2 d-flex justify-content-between align-items-start gap-2"
-                        >
-                          <span>
-                            <strong>Basic {skill.level}</strong> — {skill.name}
-                          </span>
-                          <Button
-                            size="sm"
-                            className="rounded-pill px-3"
-                            variant="outline-danger"
-                            style={{ fontSize: 12 }}
-                            onClick={() => this.removeSkill("cooldown", skill.id)}
-                            disabled={saving}
-                          >
-                            Remove
-                          </Button>
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                {this.renderNotesDisplay("cooldown", "Cool-down")}
-                {this.renderNotesBlock("cooldown", "Cool-down")}
-              </Card.Body>
-            </Card>
-          </Col>
-
-          {/* Add skills (right) — only in Edit mode */}
-          {isEditing ? (
-            <Col md={6} className="mb-4">
-              <Card>
-                <Card.Body>
-                  <Card.Title className="d-flex justify-content-between align-items-center">
-                    <span>Add Skills</span>
-                    <Badge bg="secondary">{selectedSet.size} selected</Badge>
-                  </Card.Title>
-
-                  <div className="d-flex gap-2 mb-2 flex-wrap">
-                    {[
-                      { key: "main", label: "Main" },
-                      { key: "warmup", label: "Warm-up" },
-                      { key: "cooldown", label: "Cool-down" }
-                    ].map(({ key, label }) => (
-                      <Button
-                        key={key}
-                        size="sm"
-                        variant={activeRole === key ? "primary" : "outline-secondary"}
-                        onClick={() => this.setState({ activeRole: key })}
-                        disabled={saving}
-                      >
-                        Add to {label}
-                      </Button>
-                    ))}
-                  </div>
-
-                  {/* ✅ NEW: SEARCH BOX */}
-                  <Form.Control
-                    type="text"
-                    placeholder={`Search skills to add to ${roleLabel}…`}
-                    value={this.state.skillSearch}
-                    onChange={(e) => this.setState({ skillSearch: e.target.value })}
-                    disabled={saving}
-                    style={{ borderRadius: 12 }}
-                  />
-                  <div className="form-text mt-1">
-                    Search by name (or level/category if you have those fields).
-                  </div>
-
-                  {availableSkillsRaw.length === 0 ? (
-                    <p className="text-muted mb-0 mt-3">No more skills available to add.</p>
-                  ) : levels.length === 0 ? (
-                    <p className="text-muted mb-0 mt-3">
-                      {this.state.skillSearch ? "No matches for that search." : "No skills available to add."}
-                    </p>
-                  ) : (
-                    <div style={{ maxHeight: 420, overflowY: "auto" }} className="mt-3">
-                      {levels.map((lvl) => (
-                        <div key={lvl} className="mb-3">
-                          <div className="fw-semibold mb-2">Basic {lvl}</div>
-                          {availableByLevel[lvl]
-                            .slice()
-                            .sort((a, b) => norm(a.name).localeCompare(norm(b.name)))
-                            .map((skill) => (
-                              <Form.Check
-                                key={skill.id}
-                                type="checkbox"
-                                id={`add-${activeRole}-skill-${skill.id}`}
-                                label={skill.name}
-                                checked={selectedSet.has(skill.id)}
-                                onChange={() => this.toggleAddSkill(activeRole, skill.id)}
-                                disabled={saving}
-                                className="mb-2"
-                              />
-                            ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="d-flex gap-2 mt-3 flex-wrap">
-                    <Button
-                      variant="primary"
-                      onClick={() => this.addSelectedSkills(activeRole)}
-                      disabled={saving || selectedSet.size === 0}
-                    >
-                      {saving ? "Saving..." : `Add selected to ${roleLabel}`}
-                    </Button>
-
-                    <Button
-                      variant="outline-secondary"
-                      onClick={() =>
-                        this.setState((prev) => ({
-                          selectedSkillIdsByRole: {
-                            ...prev.selectedSkillIdsByRole,
-                            [activeRole]: new Set()
-                          }
-                        }))
-                      }
-                      disabled={saving || selectedSet.size === 0}
-                    >
-                      Clear selected
-                    </Button>
-
-                    {/* ✅ optional: clear search */}
-                    <Button
-                      variant="outline-secondary"
-                      onClick={() => this.setState({ skillSearch: "" })}
-                      disabled={saving || !this.state.skillSearch}
-                    >
-                      Clear search
-                    </Button>
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
-          ) : null}
-        </Row>
-
-        {/* Scheduler card (unchanged) */}
-        <Card className="mt-3" style={{ borderRadius: 14 }}>
-          <Card.Body>
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
-              <Card.Title className="mb-0">Lesson Plan Scheduler</Card.Title>
-              <div className="d-flex align-items-center gap-2">
-                <div className="text-muted" style={{ fontSize: 13 }}>
-                  <Badge bg="secondary">{occurrences.length}</Badge> classes
+                  <Button
+                    size="sm"
+                    className={BTN_CLASS}
+                    style={BTN_STYLE}
+                    variant="outline-secondary"
+                    onClick={() =>
+                      this.setState({
+                        success: null,
+                        duplicatedLessonPlanId: null,
+                        duplicatedLessonPlanTitle: "",
+                      })
+                    }
+                  >
+                    Dismiss
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Alert>
+          )}
 
-            {/* WEEKLY OVERVIEW GRID */}
-            <div className="mt-3">
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <div className="text-uppercase text-muted" style={{ fontSize: 11, letterSpacing: 0.6 }}>
-                  MY WEEKLY SCHEDULE
-                </div>
-                <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-              </div>
+          {error && <Alert variant="danger">{error}</Alert>}
 
-              {this.state.weeklyOverviewError ? (
-                <Alert variant="danger" className="mb-2">
-                  {this.state.weeklyOverviewError}
-                </Alert>
+          <div className="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <a
+                href="/lesson-plans"
+                className="text-decoration-none"
+                onClick={(e) => {
+                  e.preventDefault();
+                  this.requestNavigation(() => this.props.navigate("/lesson-plans"));
+                }}
+              >
+                ← Back to lesson plans
+              </a>
+
+              {this.props.rosterId ? (
+                <>
+                  <span className="text-muted">•</span>
+                  <a
+                    href={`/rosters/${this.props.rosterId}`}
+                    className="text-decoration-none"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      this.requestNavigation(() => this.props.navigate(`/rosters/${this.props.rosterId}`));
+                    }}
+                  >
+                    Back to roster
+                  </a>
+                </>
               ) : null}
+            </div>
 
-              {this.state.weeklyOverviewLoading ? (
-                <div className="text-muted" style={{ fontSize: 13 }}>
-                  Loading weekly schedule…
-                </div>
-              ) : (
-                <Row className="g-2">
-                  {Array.from({ length: 7 }).map((_, wd) => {
-                    const rows = (this.state.weeklyOverview || {})[wd] || [];
-                    return (
-                      <Col key={wd} xs={12} sm={6} md={3} lg>
-                        <div className="border rounded-3 p-2 h-100" style={{ background: "#fff" }}>
-                          <div className="d-flex justify-content-between align-items-center">
-                            <div className="text-uppercase text-muted" style={{ fontSize: 10, letterSpacing: 0.6 }}>
-                              {dayShort[wd]}
-                            </div>
-                            <span className="text-muted" style={{ fontSize: 12 }}>
-                              {rows.length ? rows.length : ""}
+            {!isEditing ? (
+              <div className="d-flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  className={BTN_CLASS}
+                  style={BTN_STYLE}
+                  variant="primary"
+                  onClick={this.startEdit}
+                >
+                  Edit plan
+                </Button>
+                <Button
+                  size="sm"
+                  className={BTN_CLASS}
+                  style={BTN_STYLE}
+                  variant="outline-secondary"
+                  onClick={this.duplicateLessonPlan}
+                  disabled={saving}
+                >
+                  Duplicate
+                </Button>
+                <Button
+                  size="sm"
+                  className={BTN_CLASS}
+                  style={BTN_STYLE}
+                  variant="outline-danger"
+                  onClick={this.deleteLessonPlan}
+                  disabled={saving}
+                >
+                  Delete plan
+                </Button>
+              </div>
+            ) : (
+              <div className="d-flex gap-2 flex-wrap align-items-center">
+                <Button
+                  size="sm"
+                  variant="outline-secondary"
+                  className={BTN_CLASS}
+                  style={BTN_STYLE}
+                  onClick={this.cancelEdit}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={hasUnsaved ? "primary" : "secondary"}
+                  className={BTN_CLASS}
+                  style={BTN_STYLE}
+                  onClick={this.saveLessonPlan}
+                  disabled={saving || !hasUnsaved}
+                >
+                  {saving ? "Saving..." : hasUnsaved ? "Save Changes" : "All Changes Saved"}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div id="lesson-overview" tabIndex="-1">
+            <Card className="mb-4 border-0 shadow-sm" style={{ borderRadius: 18 }}>
+              <Card.Body className="p-4">
+                {!isEditing ? (
+                  <div className="d-flex flex-column gap-4">
+                    <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-4">
+                      <div style={{ flex: 1, minWidth: 280 }}>
+                        <SectionKicker className="mb-2">Lesson Overview</SectionKicker>
+
+                        <Card.Title
+                          className="mb-2"
+                          style={{
+                            fontSize: "1.85rem",
+                            lineHeight: 1.15,
+                            letterSpacing: "-0.02em",
+                          }}
+                        >
+                          {lessonPlan.title}
+                        </Card.Title>
+
+                        {lessonPlan.description ? (
+                          <div
+                            className="d-flex align-items-start gap-2 text-muted"
+                            style={{
+                              fontSize: 15,
+                              lineHeight: 1.55,
+                              maxWidth: 760,
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                fontSize: 16,
+                                lineHeight: 1.4,
+                                marginTop: 1,
+                                color: "#6c757d",
+                              }}
+                            >
+                              ↳
                             </span>
+                            <div>{lessonPlan.description}</div>
+                          </div>
+                        ) : (
+                          <div className="text-muted" style={{ fontSize: 14 }}>
+                            No description added.
+                          </div>
+                        )}
+
+                        <div className="mt-4">
+                          <div className="text-muted mb-3" style={{ fontSize: 13 }}>
+                            <b>Created</b>: {formatDateLong(lessonPlan.created_at)}
                           </div>
 
-                          {rows.length === 0 ? (
-                            <div className="text-muted mt-2" style={{ fontSize: 12 }}>
-                              —
+                          <div className="text-muted mb-3" style={{ fontSize: 13 }}>
+                            <b>Scheduled for:</b>
+                          </div>
+
+                          {occurrences.length === 0 ? (
+                            <div className="text-muted" style={{ fontSize: 13 }}>
+                              No scheduled dates yet
                             </div>
                           ) : (
-                            <div className="mt-2 d-flex flex-column" style={{ gap: 6 }}>
-                              {rows.slice(0, 6).map(({ roster, schedule }) => {
-                                const t = compactRange(schedule?.starts_at, schedule?.ends_at);
-                                return (
-                                  <div
-                                    key={`${roster?.id}-${schedule?.id}`}
-                                    className="d-flex align-items-start justify-content-between"
-                                    style={{ gap: 8 }}
+                            <div className="d-flex flex-wrap align-items-center" style={{ gap: 8 }}>
+                              {occurrences
+                                .slice()
+                                .sort((a, b) => (a.taught_on || "").localeCompare(b.taught_on || ""))
+                                .map((occ) => (
+                                  <a
+                                    key={occ.id}
+                                    href={`/calendar?date=${encodeURIComponent(occ.taught_on)}`}
+                                    className="text-decoration-none"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      this.requestNavigation(() =>
+                                        this.props.navigate(
+                                          `/calendar?date=${encodeURIComponent(occ.taught_on)}`
+                                        )
+                                      );
+                                    }}
                                   >
-                                    <div style={{ minWidth: 0 }}>
-                                      <div
-                                        className="fw-semibold"
-                                        style={{
-                                          fontSize: 12,
-                                          lineHeight: 1.15,
-                                          whiteSpace: "nowrap",
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis"
-                                        }}
-                                        title={roster?.name || ""}
-                                      >
-                                        {roster?.name || "Roster"}
-                                      </div>
-
-                                      <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.15 }}>
-                                        {t || "time"}
-                                        {schedule?.location ? ` • ${schedule.location}` : ""}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-
-                              {rows.length > 6 ? (
-                                <div className="text-muted" style={{ fontSize: 11 }}>
-                                  +{rows.length - 6} more
-                                </div>
-                              ) : null}
+                                    <Badge
+                                      bg="light"
+                                      text="dark"
+                                      className="border"
+                                      style={{
+                                        fontWeight: 500,
+                                        fontSize: 12,
+                                        padding: "6px 10px",
+                                        borderRadius: 999,
+                                      }}
+                                    >
+                                      {formatDateShort(occ.taught_on)}
+                                    </Badge>
+                                  </a>
+                                ))}
                             </div>
                           )}
                         </div>
-                      </Col>
-                    );
-                  })}
-                </Row>
-              )}
-            </div>
+                      </div>
 
-            <hr className="my-3" />
+                      <div
+                        className="border rounded-4 p-3"
+                        style={{
+                          minWidth: 240,
+                          background: "#fcfcff",
+                          borderColor: "#e9ecef",
+                        }}
+                      >
+                        <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+                          On this page
+                        </div>
 
-            {/* Scheduled dates */}
-            <div className="mt-3">
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <SectionKicker>Lesson plan scheduled dates</SectionKicker>
-                <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-                <Badge bg="light" text="dark">
-                  {occurrences.length}
-                </Badge>
-              </div>
+                        <div className="d-flex flex-column align-items-start" style={{ gap: 6 }}>
+                          {tocItems.map((item) => (
+                            <Button
+                              key={item.id}
+                              variant="link"
+                              className="p-0 text-decoration-none text-start"
+                              style={{ fontSize: 14, color: "#495057" }}
+                              onClick={() => this.scrollToSection(item.id)}
+                            >
+                              {item.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="d-flex flex-column flex-xl-row gap-4 align-items-start">
+                    <div style={{ flex: 1, minWidth: 0, maxWidth: 760 }}>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <SectionKicker>Lesson Plan Builder</SectionKicker>
+                        <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                      </div>
 
-              {occurrences.length === 0 ? (
-                <p className="text-muted mb-0 mt-2">No dates scheduled yet.</p>
-              ) : (
-                <div className="d-grid mt-2" style={{ gap: 8 }}>
-                  {occurrences
-                    .slice()
-                    .sort((a, b) => (a.taught_on || "").localeCompare(b.taught_on || ""))
-                    .map((occ) => {
-                      const time = formatTimeRange(occ.starts_at, occ.ends_at);
-                      const rosters = this.getMatchingWeeklyRostersForOccurrence(occ);
+                      <div className="text-muted mb-4" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                        Update the lesson title and description here, then jump to any section below to
+                        edit skills, notes, or scheduling details.
+                      </div>
 
-                      return (
-                        <div
-                          key={occ.id}
-                          className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-center"
-                          style={{ gap: 12, background: "#fbfbfd", borderColor: "#e9ecef" }}
-                        >
-                          <div style={{ minWidth: 0 }}>
-                            <div className="d-flex flex-wrap align-items-center" style={{ gap: 10 }}>
-                              <Link
-                                to={`/calendar?date=${encodeURIComponent(occ.taught_on)}`}
-                                className="text-decoration-none fw-semibold"
-                                style={{ fontSize: 13 }}
-                              >
-                                {formatDateShort(occ.taught_on)}
-                              </Link>
+                      <Form.Group className="mb-3">
+                        <Form.Label className="fw-semibold">Title</Form.Label>
+                        <Form.Control
+                          name="title"
+                          value={title}
+                          onChange={this.handleFieldChange}
+                          disabled={saving}
+                          placeholder="Lesson plan title"
+                          style={{ borderRadius: 12 }}
+                        />
+                      </Form.Group>
 
-                              {time ? (
-                                <span className="text-muted" style={{ fontSize: 12 }}>
-                                  {compactRange(occ.starts_at, occ.ends_at) || time}
-                                </span>
-                              ) : null}
+                      <Form.Group>
+                        <Form.Label className="fw-semibold">Description</Form.Label>
+                        <Form.Control
+                          as="textarea"
+                          rows={3}
+                          name="description"
+                          value={description}
+                          onChange={this.handleFieldChange}
+                          disabled={saving}
+                          placeholder="Optional lesson overview, goals, or reminders…"
+                          style={{ borderRadius: 12 }}
+                        />
+                      </Form.Group>
+                    </div>
 
-                              {rosters.length > 0 ? (
-                                <div className="d-flex flex-wrap align-items-center" style={{ gap: 6 }}>
-                                  {rosters.slice(0, 2).map((r) => (
-                                    <Link
-                                      key={r.id}
-                                      to={`/rosters/${r.id}`}
-                                      className="text-decoration-none"
-                                      title={r.name || "Roster"}
+                    <div
+                      className="border rounded-4 p-3"
+                      style={{
+                        width: "100%",
+                        maxWidth: 260,
+                        background: "#fcfcff",
+                        borderColor: "#e9ecef",
+                      }}
+                    >
+                      <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+                        Jump to section
+                      </div>
+
+                      <div className="d-flex flex-column align-items-start" style={{ gap: 6 }}>
+                        {tocItems.map((item) => (
+                          <Button
+                            key={item.id}
+                            variant="link"
+                            className="p-0 text-decoration-none text-start"
+                            style={{ fontSize: 14, color: "#495057" }}
+                            onClick={() => this.scrollToSection(item.id)}
+                          >
+                            {item.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+          </div>
+
+          <div id="section-warmup" tabIndex="-1">
+            <LessonSectionCard
+              title="Warm-up"
+              role={ROLE.WARMUP}
+              skills={warmupSkills}
+              notes={this.state.warmupNotes}
+              isEditing={isEditing}
+              saving={saving}
+              onNotesChange={(value) => this.setState({ warmupNotes: value })}
+              onRemoveSkill={this.removeSkill}
+              taughtIds={taughtSkillIdsByRole.warmup}
+              onToggleTaught={this.toggleTaught}
+              allSkills={skills}
+              addSkillsOpen={addSkillsOpenByRole.warmup}
+              searchQuery={skillSearchByRole.warmup}
+              onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+              onSearchChange={this.changeSkillSearch}
+              onClearSearch={this.clearSkillSearch}
+              onToggleAddSkill={this.toggleAddSkill}
+              onClearAddedSelections={this.clearAddedSelections}
+              originalSkillIds={new Set(originalWarmupSkills.map((s) => s.id))}
+            />
+          </div>
+
+          <div id="section-main" tabIndex="-1">
+            <LessonSectionCard
+              title="Main Lesson"
+              role={ROLE.MAIN}
+              skills={mainSkills}
+              notes={this.state.mainNotes}
+              isEditing={isEditing}
+              saving={saving}
+              onNotesChange={(value) => this.setState({ mainNotes: value })}
+              onRemoveSkill={this.removeSkill}
+              taughtIds={taughtSkillIdsByRole.main}
+              onToggleTaught={this.toggleTaught}
+              allSkills={skills}
+              addSkillsOpen={addSkillsOpenByRole.main}
+              searchQuery={skillSearchByRole.main}
+              onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+              onSearchChange={this.changeSkillSearch}
+              onClearSearch={this.clearSkillSearch}
+              onToggleAddSkill={this.toggleAddSkill}
+              onClearAddedSelections={this.clearAddedSelections}
+              originalSkillIds={new Set(originalMainSkills.map((s) => s.id))}
+            />
+          </div>
+
+          <div id="section-cooldown" tabIndex="-1">
+            <LessonSectionCard
+              title="Cool-down"
+              role={ROLE.COOLDOWN}
+              skills={cooldownSkills}
+              notes={this.state.cooldownNotes}
+              isEditing={isEditing}
+              saving={saving}
+              onNotesChange={(value) => this.setState({ cooldownNotes: value })}
+              onRemoveSkill={this.removeSkill}
+              taughtIds={taughtSkillIdsByRole.cooldown}
+              onToggleTaught={this.toggleTaught}
+              allSkills={skills}
+              addSkillsOpen={addSkillsOpenByRole.cooldown}
+              searchQuery={skillSearchByRole.cooldown}
+              onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+              onSearchChange={this.changeSkillSearch}
+              onClearSearch={this.clearSkillSearch}
+              onToggleAddSkill={this.toggleAddSkill}
+              onClearAddedSelections={this.clearAddedSelections}
+              originalSkillIds={new Set(originalCooldownSkills.map((s) => s.id))}
+            />
+          </div>
+
+          <div id="section-scheduler" tabIndex="-1" style={{ scrollMarginTop: 24 }}>
+            {isEditing ? (
+              <div className="mt-5 pt-2">
+                <div
+                  className="mb-3"
+                  style={{
+                    height: 1,
+                    background: "linear-gradient(90deg, rgba(0,0,0,0.08), rgba(0,0,0,0.02))",
+                  }}
+                />
+
+                <Card className="mt-4 border-0 shadow-sm" style={{ borderRadius: 14 }}>
+                  <Card.Body>
+                    <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
+                      <Card.Title className="mb-0">Lesson Plan Scheduler</Card.Title>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <SectionKicker>My weekly schedule</SectionKicker>
+                        <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                      </div>
+
+                      {this.state.weeklyOverviewError ? (
+                        <Alert variant="danger" className="mb-2">
+                          {this.state.weeklyOverviewError}
+                        </Alert>
+                      ) : null}
+
+                      {this.state.weeklyOverviewLoading ? (
+                        <div className="text-muted" style={{ fontSize: 13 }}>
+                          Loading weekly schedule…
+                        </div>
+                      ) : (
+                        <Row className="g-2">
+                          {Array.from({ length: 7 }).map((_, wd) => {
+                            const rows = (this.state.weeklyOverview || {})[wd] || [];
+                            return (
+                              <Col key={wd} xs={12} sm={6} md={3} lg>
+                                <div className="border rounded-3 p-2 h-100" style={{ background: "#fff" }}>
+                                  <div className="d-flex justify-content-between align-items-center">
+                                    <div
+                                      className="text-uppercase text-muted"
+                                      style={{ fontSize: 10, letterSpacing: 0.6 }}
                                     >
-                                      <Badge
-                                        bg="light"
-                                        text="dark"
-                                        className="border"
-                                        style={{
-                                          fontWeight: 600,
-                                          fontSize: 11,
-                                          padding: "6px 10px",
-                                          borderRadius: 999
+                                      {dayShort[wd]}
+                                    </div>
+                                    <span className="text-muted" style={{ fontSize: 12 }}>
+                                      {rows.length ? rows.length : ""}
+                                    </span>
+                                  </div>
+
+                                  {rows.length === 0 ? (
+                                    <div className="text-muted mt-2" style={{ fontSize: 12 }}>
+                                      —
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 d-flex flex-column" style={{ gap: 6 }}>
+                                      {rows.slice(0, 6).map(({ roster, schedule }) => {
+                                        const t = compactRange(schedule?.starts_at, schedule?.ends_at);
+                                        return (
+                                          <div
+                                            key={`${roster?.id}-${schedule?.id}`}
+                                            className="d-flex align-items-start justify-content-between"
+                                            style={{ gap: 8 }}
+                                          >
+                                            <div style={{ minWidth: 0 }}>
+                                              <div
+                                                className="fw-semibold"
+                                                style={{
+                                                  fontSize: 12,
+                                                  lineHeight: 1.15,
+                                                  whiteSpace: "nowrap",
+                                                  overflow: "hidden",
+                                                  textOverflow: "ellipsis",
+                                                }}
+                                                title={roster?.name || ""}
+                                              >
+                                                {roster?.name || "Roster"}
+                                              </div>
+
+                                              <div
+                                                className="text-muted"
+                                                style={{ fontSize: 11, lineHeight: 1.15 }}
+                                              >
+                                                {t || "time"}
+                                                {schedule?.location ? ` • ${schedule.location}` : ""}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+
+                                      {rows.length > 6 ? (
+                                        <div className="text-muted" style={{ fontSize: 11 }}>
+                                          +{rows.length - 6} more
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                </div>
+                              </Col>
+                            );
+                          })}
+                        </Row>
+                      )}
+                    </div>
+
+                    <hr className="my-3" />
+
+                    <div className="mt-3">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <SectionKicker>Lesson plan scheduled dates</SectionKicker>
+                        <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                        <Badge bg="light" text="dark">
+                          {draftOccurrences.length}
+                        </Badge>
+                      </div>
+
+                      {draftOccurrences.length === 0 ? (
+                        <p className="text-muted mb-0 mt-2">No dates scheduled yet.</p>
+                      ) : (
+                        <div className="d-grid mt-2" style={{ gap: 8 }}>
+                          {draftOccurrences
+                            .slice()
+                            .sort((a, b) => (a.taught_on || "").localeCompare(b.taught_on || ""))
+                            .map((occ) => {
+                              const time = formatTimeRange(occ.starts_at, occ.ends_at);
+                              const rosters = this.getMatchingWeeklyRostersForOccurrence(occ);
+
+                              return (
+                                <div
+                                  key={occ.id}
+                                  className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-center"
+                                  style={{
+                                    gap: 12,
+                                    background: occ._isNew ? "#f3f8ff" : "#fbfbfd",
+                                    borderColor: occ._isNew ? "#cfe2ff" : "#e9ecef",
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0 }}>
+                                    <div className="d-flex flex-wrap align-items-center" style={{ gap: 10 }}>
+                                      <a
+                                        href={`/calendar?date=${encodeURIComponent(occ.taught_on)}`}
+                                        className="text-decoration-none fw-semibold"
+                                        style={{ fontSize: 13 }}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          this.requestNavigation(() =>
+                                            this.props.navigate(
+                                              `/calendar?date=${encodeURIComponent(occ.taught_on)}`
+                                            )
+                                          );
                                         }}
                                       >
-                                        {r.name || "Roster"}
-                                      </Badge>
-                                    </Link>
-                                  ))}
+                                        {formatDateShort(occ.taught_on)}
+                                      </a>
 
-                                  {rosters.length > 2 ? (
-                                    <span className="text-muted" style={{ fontSize: 12 }}>
-                                      +{rosters.length - 2}
-                                    </span>
-                                  ) : null}
+                                      {time ? (
+                                        <span className="text-muted" style={{ fontSize: 12 }}>
+                                          {compactRange(occ.starts_at, occ.ends_at) || time}
+                                        </span>
+                                      ) : null}
+
+                                      {rosters.length > 0 ? (
+                                        <div className="d-flex flex-wrap align-items-center" style={{ gap: 6 }}>
+                                          {rosters.slice(0, 2).map((r) => (
+                                            <a
+                                              key={r.id}
+                                              href={`/rosters/${r.id}`}
+                                              className="text-decoration-none"
+                                              title={r.name || "Roster"}
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                this.requestNavigation(() =>
+                                                  this.props.navigate(`/rosters/${r.id}`)
+                                                );
+                                              }}
+                                            >
+                                              <Badge
+                                                bg="light"
+                                                text="dark"
+                                                className="border"
+                                                style={{
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  padding: "6px 10px",
+                                                  borderRadius: 999,
+                                                }}
+                                              >
+                                                {r.name || "Roster"}
+                                              </Badge>
+                                            </a>
+                                          ))}
+
+                                          {rosters.length > 2 ? (
+                                            <span className="text-muted" style={{ fontSize: 12 }}>
+                                              +{rosters.length - 2}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+
+                                      {occ._isNew ? (
+                                        <Badge bg="primary" style={{ fontSize: 10 }}>
+                                          Unsaved
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+
+                                    {occ.location ? (
+                                      <div className="text-muted mt-1" style={{ fontSize: 12 }}>
+                                        {occ.location}
+                                      </div>
+                                    ) : null}
+                                  </div>
+
+                                  <Button
+                                    size="sm"
+                                    variant="outline-danger"
+                                    onClick={() => this.deleteOccurrence(occ.id)}
+                                    disabled={saving}
+                                    className={BTN_CLASS}
+                                    style={BTN_STYLE}
+                                  >
+                                    Remove
+                                  </Button>
                                 </div>
-                              ) : null}
-                            </div>
-
-                            {occ.location ? (
-                              <div className="text-muted mt-1" style={{ fontSize: 12 }}>
-                                {occ.location}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <Button
-                            size="sm"
-                            variant="outline-danger"
-                            onClick={() => this.deleteOccurrence(occ.id)}
-                            disabled={saving}
-                            className="rounded-pill px-3"
-                            style={{ fontSize: 12 }}
-                          >
-                            Remove
-                          </Button>
+                              );
+                            })}
                         </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
+                      )}
+                    </div>
 
-            <hr className="my-3" />
+                    <hr className="my-3" />
 
-            {/* Add to schedule */}
-            <div className="d-flex align-items-center gap-2 mb-2">
-              <SectionKicker>Add to schedule</SectionKicker>
-              <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-            </div>
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <SectionKicker>Add to schedule</SectionKicker>
+                      <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                    </div>
 
-            <Form onSubmit={this.createOccurrence}>
-              <Row className="g-2 align-items-end">
-                <Col md={4}>
-                  <Form.Label>Date</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="newTaughtOn"
-                    value={this.state.newTaughtOn}
-                    onChange={this.handleOccFieldChange}
-                    required
-                    disabled={saving}
-                  />
-                </Col>
+                    <Form onSubmit={this.createOccurrence}>
+                      <Row className="g-2 align-items-end">
+                        <Col md={4}>
+                          <Form.Label>Date</Form.Label>
+                          <Form.Control
+                            type="date"
+                            name="newTaughtOn"
+                            value={this.state.newTaughtOn}
+                            onChange={this.handleOccFieldChange}
+                            required
+                            disabled={saving}
+                          />
+                        </Col>
 
-                <Col md={3}>
-                  <Form.Label>Start</Form.Label>
-                  <Form.Control
-                    type="time"
-                    name="newStartsAt"
-                    value={this.state.newStartsAt}
-                    onChange={this.handleOccFieldChange}
-                    disabled={saving}
-                  />
-                </Col>
+                        <Col md={3}>
+                          <Form.Label>Start</Form.Label>
+                          <Form.Control
+                            type="time"
+                            name="newStartsAt"
+                            value={this.state.newStartsAt}
+                            onChange={this.handleOccFieldChange}
+                            disabled={saving}
+                          />
+                        </Col>
 
-                <Col md={3}>
-                  <Form.Label>End</Form.Label>
-                  <Form.Control
-                    type="time"
-                    name="newEndsAt"
-                    value={this.state.newEndsAt}
-                    onChange={this.handleOccFieldChange}
-                    disabled={saving}
-                  />
-                </Col>
+                        <Col md={3}>
+                          <Form.Label>End</Form.Label>
+                          <Form.Control
+                            type="time"
+                            name="newEndsAt"
+                            value={this.state.newEndsAt}
+                            onChange={this.handleOccFieldChange}
+                            disabled={saving}
+                          />
+                        </Col>
 
-                <Col md={10}>
-                  <Form.Label>Location (optional)</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="newLocation"
-                    placeholder="e.g. Rink A"
-                    value={this.state.newLocation}
-                    onChange={this.handleOccFieldChange}
-                    disabled={saving}
-                  />
-                </Col>
+                        <Col md={10}>
+                          <Form.Label>Location (optional)</Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="newLocation"
+                            placeholder="e.g. Rink A"
+                            value={this.state.newLocation}
+                            onChange={this.handleOccFieldChange}
+                            disabled={saving}
+                          />
+                        </Col>
 
-                <Col md={2}>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="w-100 rounded-pill"
-                    variant="primary"
-                    disabled={saving}
-                  >
-                    {saving ? "Saving..." : "Add"}
-                  </Button>
-                </Col>
-              </Row>
+                        <Col md={2}>
+                          <Button
+                            type="submit"
+                            size="sm"
+                            className={`w-100 ${BTN_CLASS}`}
+                            style={BTN_STYLE}
+                            variant="primary"
+                            disabled={saving}
+                          >
+                            Add
+                          </Button>
+                        </Col>
+                      </Row>
 
-              <div className="mt-2 d-flex gap-2 flex-wrap">
-                <Button
-                  size="sm"
-                  type="button"
-                  className="w-100 rounded-pill"
-                  variant="primary"
-                  disabled={saving}
-                  onClick={() =>
-                    this.setState({
-                      newTaughtOn: "",
-                      newStartsAt: "",
-                      newEndsAt: "",
-                      newLocation: ""
-                    })
-                  }
-                >
-                  Clear
-                </Button>
+                      <div className="mt-2 d-flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          type="button"
+                          className={BTN_CLASS}
+                          style={BTN_STYLE}
+                          variant="outline-secondary"
+                          disabled={saving}
+                          onClick={() =>
+                            this.setState({
+                              newTaughtOn: "",
+                              newStartsAt: "",
+                              newEndsAt: "",
+                              newLocation: "",
+                            })
+                          }
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </Form>
+                  </Card.Body>
+                </Card>
               </div>
-            </Form>
-          </Card.Body>
-        </Card>
-      </div>
+            ) : null}
+          </div>
+        </div>
+
+        <UnsavedChangesModal
+          show={showUnsavedModal}
+          saving={saving}
+          onSave={this.saveChangesAndContinue}
+          onDiscard={this.discardChangesAndContinue}
+          onKeepEditing={() => this.setState({ showUnsavedModal: false, pendingNavigation: null })}
+        />
+      </>
     );
   }
 }
