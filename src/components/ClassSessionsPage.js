@@ -119,13 +119,7 @@ function normalizeAttendanceRowsFromOccurrence(session) {
 function sessionDisplayTitle(session) {
   const rosterName = session?.matching_rosters?.[0]?.name;
   const explicitRosterName = session?.roster?.name;
-  const titleRoster = explicitRosterName || rosterName;
-  const timeLabel = formatShortTime(session?.starts_at);
-
-  if (timeLabel && titleRoster) return `Session at ${timeLabel} • ${titleRoster}`;
-  if (timeLabel) return `Session at ${timeLabel}`;
-  if (titleRoster) return `Session • ${titleRoster}`;
-  return "Class Session";
+  return explicitRosterName || rosterName || "Class Session";
 }
 
 function parseTimeToMinutes(value) {
@@ -285,131 +279,103 @@ function SessionSummaryCard({ session, allRosters, onJumpToResolution }) {
   const attendanceSummary = session?.attendance_summary || {};
   const status = getSessionStatus(session, allRosters);
   const linkedRoster = session?.matching_rosters?.[0] || null;
+  const totalStudents =
+    linkedRoster?.student_count ||
+    (linkedRoster?.students ? linkedRoster.students.length : 0) ||
+    attendanceSummary.total ||
+    0;
 
   return (
     <Card className="border-0 shadow-sm mb-3">
       <Card.Body>
-        <div className="d-flex flex-column flex-xl-row justify-content-between gap-3">
-          <div style={{ minWidth: 0 }}>
-            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-              <div
-                className="text-uppercase text-muted"
-                style={{ fontSize: 11, letterSpacing: 0.6 }}
-              >
-                Class Session
-              </div>
-              <SessionStatusBadge status={status} />
-            </div>
-
-            <div className="fw-semibold" style={{ fontSize: 24, lineHeight: 1.15 }}>
-              {sessionDisplayTitle(session)}
-            </div>
-
-            <div className="text-muted mt-2" style={{ fontSize: 14 }}>
-              {formatLongDate(session.taught_on)}
-              {formatTimeRange(session.starts_at, session.ends_at)
-                ? ` • ${formatTimeRange(session.starts_at, session.ends_at)}`
-                : ""}
-              {session.location ? ` • ${session.location}` : ""}
-            </div>
-
-            <div className="d-flex flex-wrap gap-2 mt-3">
-              {lessonPlan?.id ? (
-                <Button
-                  as={Link}
-                  to={`/lesson-plans/${lessonPlan.id}`}
-                  size="sm"
-                  variant="outline-secondary"
-                  className="rounded-pill px-3"
-                  style={{ fontSize: 12 }}
-                >
-                  Open Lesson Plan
-                </Button>
-              ) : null}
-
-              {linkedRoster?.id ? (
-                <Button
-                  as={Link}
-                  to={`/rosters/${linkedRoster.id}`}
-                  size="sm"
-                  variant="outline-secondary"
-                  className="rounded-pill px-3"
-                  style={{ fontSize: 12 }}
-                >
-                  Open Roster
-                </Button>
-              ) : null}
-
-              {status !== "ready" ? (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  className="rounded-pill px-3"
-                  style={{ fontSize: 12 }}
-                  onClick={onJumpToResolution}
-                >
-                  Resolve Session
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div
-            className="border rounded-4 p-3"
-            style={{ minWidth: 320, background: "#fcfcff", borderColor: "#e9ecef" }}
-          >
-            <div className="mb-2 fw-semibold" style={{ fontSize: 14 }}>
+        <div
+          className="border rounded-4 p-3"
+          style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
+        >
+          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <div className="fw-semibold" style={{ fontSize: 14 }}>
               Session Details
             </div>
+            <SessionStatusBadge status={status} />
+          </div>
 
-            <div className="mb-2" style={{ fontSize: 14 }}>
-              <div className="text-muted" style={{ fontSize: 12 }}>
-                Lesson Plan
-              </div>
-              <div className="fw-semibold">
-                {lessonPlan?.id ? (
-                  <Link to={`/lesson-plans/${lessonPlan.id}`} className="text-decoration-none">
-                    {lessonPlan.title || "Untitled lesson plan"}
-                  </Link>
-                ) : (
-                  lessonPlan.title || "Untitled lesson plan"
-                )}
-              </div>
+          <div className="mb-2" style={{ fontSize: 14 }}>
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              Lesson Plan
             </div>
-
-            <div className="mb-2" style={{ fontSize: 14 }}>
-              <div className="text-muted" style={{ fontSize: 12 }}>
-                Roster
-              </div>
-              <div className="fw-semibold">
-                {linkedRoster?.id ? (
-                  <Link to={`/rosters/${linkedRoster.id}`} className="text-decoration-none">
-                    {linkedRoster.name}
-                  </Link>
-                ) : (
-                  "Not linked yet"
-                )}
-              </div>
-            </div>
-
-            {lessonPlan.description ? (
-              <div className="text-muted mb-3" style={{ fontSize: 13, lineHeight: 1.45 }}>
-                {lessonPlan.description}
-              </div>
-            ) : null}
-
-            <div className="text-muted mb-2" style={{ fontSize: 12 }}>
-              Attendance Snapshot
-            </div>
-
-            <div className="d-flex flex-wrap gap-2">
-              <Badge bg="light" text="dark" className="border">Total {attendanceSummary.total || 0}</Badge>
-              <Badge bg="light" text="dark" className="border">Present {attendanceSummary.present || 0}</Badge>
-              <Badge bg="light" text="dark" className="border">Late {attendanceSummary.late || 0}</Badge>
-              <Badge bg="light" text="dark" className="border">Absent {attendanceSummary.absent || 0}</Badge>
-              <Badge bg="light" text="dark" className="border">Excused {attendanceSummary.excused || 0}</Badge>
+            <div className="fw-semibold">
+              {lessonPlan?.id ? (
+                <Link to={`/lesson-plans/${lessonPlan.id}`} className="text-decoration-none">
+                  {lessonPlan.title || "Untitled lesson plan"}
+                </Link>
+              ) : (
+                lessonPlan.title || "Untitled lesson plan"
+              )}
             </div>
           </div>
+
+          <div className="mb-2" style={{ fontSize: 14 }}>
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              Roster
+            </div>
+            <div className="fw-semibold">
+              {linkedRoster?.id ? (
+                <Link to={`/rosters/${linkedRoster.id}`} className="text-decoration-none">
+                  {linkedRoster.name}
+                </Link>
+              ) : (
+                "Not linked yet"
+              )}
+            </div>
+          </div>
+
+          <div className="mb-3 text-muted" style={{ fontSize: 13 }}>
+            {[formatTimeRange(session.starts_at, session.ends_at), session.location]
+              .filter(Boolean)
+              .join(" • ")}
+          </div>
+
+          {lessonPlan.description ? (
+            <div className="text-muted mb-3" style={{ fontSize: 13, lineHeight: 1.45 }}>
+              {lessonPlan.description}
+            </div>
+          ) : null}
+
+          <div className="text-muted mb-2" style={{ fontSize: 12 }}>
+            Attendance Snapshot
+          </div>
+
+          <div className="d-flex flex-wrap gap-2">
+            <Badge bg="light" text="dark" className="border">
+              {totalStudents} Student{totalStudents === 1 ? "" : "s"}
+            </Badge>
+            <Badge bg="light" text="dark" className="border">
+              Present {attendanceSummary.present || 0}
+            </Badge>
+            <Badge bg="light" text="dark" className="border">
+              Late {attendanceSummary.late || 0}
+            </Badge>
+            <Badge bg="light" text="dark" className="border">
+              Absent {attendanceSummary.absent || 0}
+            </Badge>
+            <Badge bg="light" text="dark" className="border">
+              Excused {attendanceSummary.excused || 0}
+            </Badge>
+          </div>
+
+          {status !== "ready" ? (
+            <div className="mt-3">
+              <Button
+                size="sm"
+                variant="primary"
+                className="rounded-pill px-3"
+                style={{ fontSize: 12 }}
+                onClick={onJumpToResolution}
+              >
+                Resolve Session
+              </Button>
+            </div>
+          ) : null}
         </div>
       </Card.Body>
     </Card>
@@ -494,6 +460,7 @@ function RosterAttendanceCard({
   onMarkAllPresent,
 }) {
   const rosters = session?.matching_rosters || [];
+  const totalStudents = rows.length;
 
   return (
     <Card className="border-0 shadow-sm">
@@ -504,9 +471,9 @@ function RosterAttendanceCard({
               Roster & Attendance
             </div>
 
-            {rosters.length ? (
-              <div className="d-flex flex-wrap gap-2">
-                {rosters.map((roster) => (
+            <div className="d-flex flex-wrap align-items-center gap-2">
+              {rosters.length ? (
+                rosters.map((roster) => (
                   <Badge
                     key={roster.id}
                     bg="light"
@@ -516,11 +483,15 @@ function RosterAttendanceCard({
                   >
                     {roster.name}
                   </Badge>
-                ))}
-              </div>
-            ) : (
-              <div className="text-muted">No matching rosters found.</div>
-            )}
+                ))
+              ) : (
+                <div className="text-muted">No matching rosters found.</div>
+              )}
+
+              <Badge bg="light" text="dark" className="border">
+                {totalStudents} Student{totalStudents === 1 ? "" : "s"}
+              </Badge>
+            </div>
           </div>
 
           <div className="d-flex gap-2 flex-wrap">
@@ -899,6 +870,8 @@ export default function ClassSessionsDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialDate = searchParams.get("date") || ymd(new Date());
 
+  const [showAllSessions, setShowAllSessions] = useState(false);
+
   const [date, setDate] = useState(initialDate);
   const [sessions, setSessions] = useState([]);
   const [allRosters, setAllRosters] = useState([]);
@@ -1009,6 +982,8 @@ export default function ClassSessionsDashboard() {
         status: "present",
       })),
     }));
+    setSuccess("");
+    setError("");
   };
 
   const saveAttendance = async () => {
@@ -1169,115 +1144,128 @@ export default function ClassSessionsDashboard() {
           </Card.Body>
         </Card>
       ) : (
-        <Row className="g-3">
-          <Col xl={3}>
-            <Card className="border-0 shadow-sm h-100">
-              <Card.Body>
-                <div className="text-uppercase text-muted mb-3" style={{ fontSize: 11, letterSpacing: 0.6 }}>
-                  Day Planner
-                </div>
+       <>
+  <Card className="border-0 shadow-sm mb-3">
+    <Card.Body>
+      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-3">
+        <div>
+          <div
+            className="text-uppercase text-muted"
+            style={{ fontSize: 11, letterSpacing: 0.6 }}
+          >
+            Sessions
+          </div>
+          <div className="text-muted" style={{ fontSize: 13 }}>
+            {visibleSessions.length} time slot{visibleSessions.length === 1 ? "" : "s"}
+          </div>
+        </div>
 
-                <div className="d-grid" style={{ gap: 8 }}>
-                  {visibleSessions.map((session) => {
-                    const active = String(selectedSession?.id) === String(session.id);
-                    const status = getSessionStatus(session, allRosters);
+        {visibleSessions.length > 5 ? (
+          <Button
+            size="sm"
+            variant="outline-secondary"
+            className="rounded-pill px-3"
+            style={{ fontSize: 12 }}
+            onClick={() => setShowAllSessions((v) => !v)}
+          >
+            {showAllSessions ? "Show Less" : `Show All (${visibleSessions.length})`}
+          </Button>
+        ) : null}
+      </div>
 
-                    return (
-                      <Button
-                        key={session.id}
-                        variant={active ? "primary" : "outline-secondary"}
-                        className="rounded-pill px-3 text-start"
-                        style={{
-                          fontSize: 12,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                        onClick={() => setSelectedSessionId(session.id)}
-                      >
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {formatTimeRange(session.starts_at, session.ends_at) || "Time TBD"}
-                        </span>
-                        {status !== "ready" ? (
-                          <span
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: "50%",
-                              background:
-                                status === "needs_rescheduling" ? "#ffc107" : "#dc3545",
-                              flexShrink: 0,
-                            }}
-                          />
-                        ) : null}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
+      <div className="d-flex flex-wrap gap-2">
+        {(showAllSessions ? visibleSessions : visibleSessions.slice(0, 5)).map((session) => {
+          const active = String(selectedSession?.id) === String(session.id);
+          const status = getSessionStatus(session, allRosters);
 
-          <Col xl={9}>
-            {selectedSession ? (
-              <>
-                <SessionSummaryCard
-                  session={selectedSession}
-                  allRosters={allRosters}
-                  onJumpToResolution={() => {
-                    const el = document.getElementById("session-resolution-card");
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                />
-
-                {selectedStatus !== "ready" ? (
-                  <div id="session-resolution-card">
-                    <SessionResolutionCard
-                      session={selectedSession}
-                      allRosters={allRosters}
-                      resolving={resolvingSession}
-                      onLinkRoster={linkOccurrenceToRoster}
-                      onCreateMeetingAndLink={createOneOffMeetingAndLink}
-                      onReschedule={rescheduleOccurrence}
-                    />
-                  </div>
-                ) : null}
-
-                {selectedStatus === "ready" ? (
-                  <RosterAttendanceCard
-                    session={selectedSession}
-                    rows={selectedRows}
-                    saving={savingAttendance}
-                    dirty={attendanceDirty}
-                    onChangeStatus={(studentId, status) =>
-                      updateAttendanceRow(studentId, { status })
-                    }
-                    onChangeNotes={(studentId, notes) =>
-                      updateAttendanceRow(studentId, { notes })
-                    }
-                    onSave={saveAttendance}
-                    onMarkAllPresent={markAllPresent}
+          return (
+            <Button
+              key={session.id}
+              variant={active ? "primary" : "outline-secondary"}
+              className="rounded-pill px-3"
+              style={{ fontSize: 12 }}
+              onClick={() => setSelectedSessionId(session.id)}
+            >
+              <span className="d-inline-flex align-items-center gap-2">
+                <span>{formatTimeRange(session.starts_at, session.ends_at) || "Time TBD"}</span>
+                {status !== "ready" ? (
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background:
+                        status === "needs_rescheduling" ? "#ffc107" : "#dc3545",
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
                   />
-                ) : (
-                  <Card className="border-0 shadow-sm mb-3">
-                    <Card.Body>
-                      <div className="fw-semibold mb-2">
-                        Attendance unavailable until session is resolved
-                      </div>
-                      <div className="text-muted" style={{ fontSize: 14 }}>
-                        Link this occurrence to a roster, add a one-off roster meeting, or
-                        reschedule the occurrence so students can be loaded for attendance.
-                      </div>
-                    </Card.Body>
-                  </Card>
-                )}
+                ) : null}
+              </span>
+            </Button>
+          );
+        })}
+      </div>
+    </Card.Body>
+  </Card>
 
-                <SessionPlanCard session={selectedSession} />
-              </>
-            ) : null}
-          </Col>
-        </Row>
+  {selectedSession ? (
+    <>
+      <SessionSummaryCard
+        session={selectedSession}
+        allRosters={allRosters}
+        onJumpToResolution={() => {
+          const el = document.getElementById("session-resolution-card");
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      />
+
+      {selectedStatus !== "ready" ? (
+        <div id="session-resolution-card">
+          <SessionResolutionCard
+            session={selectedSession}
+            allRosters={allRosters}
+            resolving={resolvingSession}
+            onLinkRoster={linkOccurrenceToRoster}
+            onCreateMeetingAndLink={createOneOffMeetingAndLink}
+            onReschedule={rescheduleOccurrence}
+          />
+        </div>
+      ) : null}
+
+      {selectedStatus === "ready" ? (
+        <RosterAttendanceCard
+          session={selectedSession}
+          rows={selectedRows}
+          saving={savingAttendance}
+          dirty={attendanceDirty}
+          onChangeStatus={(studentId, status) =>
+            updateAttendanceRow(studentId, { status })
+          }
+          onChangeNotes={(studentId, notes) =>
+            updateAttendanceRow(studentId, { notes })
+          }
+          onSave={saveAttendance}
+          onMarkAllPresent={markAllPresent}
+        />
+      ) : (
+        <Card className="border-0 shadow-sm mb-3">
+          <Card.Body>
+            <div className="fw-semibold mb-2">
+              Attendance unavailable until session is resolved
+            </div>
+            <div className="text-muted" style={{ fontSize: 14 }}>
+              Link this occurrence to a roster, add a one-off roster meeting, or
+              reschedule the occurrence so students can be loaded for attendance.
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
+      <SessionPlanCard session={selectedSession} />
+    </>
+  ) : null}
+</>
       )}
     </div>
   );
