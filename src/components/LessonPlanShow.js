@@ -9,6 +9,25 @@ import Form from "react-bootstrap/Form";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 import InputGroup from "react-bootstrap/InputGroup";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 function withParams(Component) {
   return (props) => {
@@ -194,9 +213,10 @@ function makeTempOccurrenceId() {
   return `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function skillIdsEqual(a = [], b = []) {
-  const aIds = a.map((s) => String(s.id)).sort();
-  const bIds = b.map((s) => String(s.id)).sort();
+function skillOrderEqual(a = [], b = []) {
+  const aIds = a.map((s) => String(s.id));
+  const bIds = b.map((s) => String(s.id));
+
   if (aIds.length !== bIds.length) return false;
   return aIds.every((id, i) => id === bIds[i]);
 }
@@ -206,6 +226,31 @@ function SectionEmpty({ children }) {
     <div
       className="text-muted border rounded-3 p-3"
       style={{ background: "#fbfbfd", borderColor: "#e9ecef", fontSize: 14 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DroppableSkillArea({ role, children, isEmpty = false }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: role,
+    data: {
+      type: "container",
+      role,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        minHeight: isEmpty ? 88 : 32,
+        borderRadius: 12,
+        background: isOver ? "rgba(13, 110, 253, 0.08)" : "transparent",
+        outline: isOver ? "2px dashed rgba(13, 110, 253, 0.25)" : "none",
+        transition: "background 0.15s ease, outline 0.15s ease",
+      }}
     >
       {children}
     </div>
@@ -251,6 +296,109 @@ function SkillRow({ skill, removable, onRemove, disabled, isNew = false }) {
   );
 }
 
+function DraggableSkillRow({
+  skill,
+  role,
+  removable,
+  onRemove,
+  disabled,
+  isNew = false,
+  isOverlay = false,
+}) {
+  const sortable = useSortable({
+    id: `${role}:${skill.id}`,
+    disabled: disabled || isOverlay,
+    data: {
+      type: "skill",
+      role,
+      skillId: skill.id,
+    },
+  });
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = sortable;
+
+  const style = isOverlay
+    ? undefined
+    : {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.25 : 1,
+      };
+
+  return (
+    <div ref={isOverlay ? undefined : setNodeRef} style={style}>
+      <div
+        className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2 w-100"
+        style={{
+          background: isNew ? "#f3f8ff" : "#fff",
+          borderColor: isNew ? "#cfe2ff" : "#e9ecef",
+          boxShadow: isOverlay || isDragging ? "0 10px 24px rgba(0,0,0,0.12)" : "none",
+        }}
+      >
+       <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
+          <button
+  type="button"
+  {...(isOverlay ? {} : attributes)}
+  {...(isOverlay ? {} : listeners)}
+  disabled={disabled}
+  aria-label={`Drag ${skill.name}`}
+  className="btn btn-light border-0 px-2 py-1 mt-1"
+  style={{
+  cursor: disabled ? "default" : "grab",
+  fontSize: 16,
+  lineHeight: 1,
+  color: "#6c757d",
+  borderRadius: 10,
+  flexShrink: 0,
+  minWidth: 40,
+  minHeight: 40,
+  touchAction: "none",
+  WebkitUserSelect: "none",
+  userSelect: "none",
+}}
+>
+  ⋮⋮
+</button>
+
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, lineHeight: 1.35 }}>
+              <strong>Basic {skill.level}</strong> — {skill.name}
+            </div>
+
+            {isNew ? (
+              <div className="mt-1">
+                <Badge bg="primary" style={{ fontSize: 10 }}>
+                  Unsaved
+                </Badge>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {removable ? (
+          <Button
+            size="sm"
+            variant="outline-danger"
+            className={`${BTN_CLASS} flex-shrink-0`}
+            style={BTN_STYLE}
+            onClick={onRemove}
+            disabled={disabled}
+          >
+            Remove
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function LessonSectionCard({
   title,
   role,
@@ -269,7 +417,6 @@ function LessonSectionCard({
   onSearchChange,
   onClearSearch,
   onToggleAddSkill,
-  onClearAddedSelections,
   originalSkillIds,
 }) {
   const hasNotes = Boolean((notes || "").trim());
@@ -317,7 +464,7 @@ function LessonSectionCard({
           </Badge>
         </div>
 
-        {isEditing ? (
+          {isEditing ? (
   <div className="mb-3">
     <div className="d-flex justify-content-center">
       <Button
@@ -401,107 +548,128 @@ function LessonSectionCard({
                   <div className="fw-semibold mb-2">Basic {lvl}</div>
 
                   {sortSkills(availableByLevel[lvl]).map((skill) => (
-                    <Form.Check
-                      key={`${role}-available-${skill.id}`}
-                      type="checkbox"
-                      id={`add-${role}-skill-${skill.id}`}
-                      label={skill.name}
-                      checked={(skills || []).some((s) => s.id === skill.id)}
-                      onChange={() => onToggleAddSkill(role, skill)}
-                      disabled={saving}
-                      className="mb-2"
-                    />
-                  ))}
+  <div
+  key={`${role}-available-${skill.id}`}
+  className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2 mb-2"
+  style={{
+    background: "#fff",
+    borderColor: "#e9ecef",
+  }}
+>
+  <div style={{ minWidth: 0 }}>
+    <div style={{ fontSize: 14, lineHeight: 1.35 }}>
+      <strong>Basic {skill.level}</strong> — {skill.name}
+    </div>
+  </div>
+
+  <Button
+    size="sm"
+    className={`${BTN_CLASS} flex-shrink-0`}
+    style={BTN_STYLE}
+    variant="outline-primary"
+    onClick={() => onToggleAddSkill(role, skill)}
+    disabled={saving}
+  >
+    Add
+  </Button>
+</div>
+))}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="d-flex gap-2 mt-3 flex-wrap">
-          <Button
-            size="sm"
-            className={BTN_CLASS}
-            style={BTN_STYLE}
-            variant="outline-secondary"
-            onClick={() => onClearAddedSelections(role, availableSkills)}
-            disabled={saving}
-          >
-            Undo
-          </Button>
-        </div>
+      
       </div>
     ) : null}
   </div>
 ) : null}
 
+          
+          <div className="mb-3">
+  <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+    Skills
+  </div>
 
-        <div className="mb-3">
-          <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
-            Skills
-          </div>
+  {!isEditing ? (
+    skills.length === 0 ? (
+      <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
+    ) : (
+      <div className="d-grid" style={{ gap: 8 }}>
+        {sortSkills(skills).map((skill) => {
+          const checked = taughtIds.has(skill.id);
 
-          {skills.length === 0 ? (
-            <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
-          ) : !isEditing ? (
-            <div className="d-grid" style={{ gap: 8 }}>
-              {sortSkills(skills).map((skill) => {
-                const checked = taughtIds.has(skill.id);
-
-                return (
-                  <div
-                    key={`${role}-view-${skill.id}`}
-                    className="border rounded-3 px-3 py-2"
+          return (
+            <div
+              key={`${role}-view-${skill.id}`}
+              className="border rounded-3 px-3 py-2"
+              style={{
+                background: checked ? "#f4f6f8" : "#fff",
+                borderColor: checked ? "#d6dde3" : "#e9ecef",
+                transition: "background-color 0.15s ease, border-color 0.15s ease",
+              }}
+            >
+              <Form.Check
+                type="checkbox"
+                id={`${role}-taught-${skill.id}`}
+                checked={checked}
+                onChange={() => onToggleTaught(role, skill.id)}
+                label={
+                  <span
                     style={{
-                      background: checked ? "#f4f6f8" : "#fff",
-                      borderColor: checked ? "#d6dde3" : "#e9ecef",
-                      transition: "background-color 0.15s ease, border-color 0.15s ease",
+                      fontSize: 14,
+                      textDecoration: checked ? "line-through" : "none",
+                      opacity: checked ? 0.68 : 1,
+                      transition: "all 0.15s ease",
                     }}
                   >
-                    <Form.Check
-                      type="checkbox"
-                      id={`${role}-taught-${skill.id}`}
-                      checked={checked}
-                      onChange={() => onToggleTaught(role, skill.id)}
-                      label={
-                        <span
-                          style={{
-                            fontSize: 14,
-                            textDecoration: checked ? "line-through" : "none",
-                            opacity: checked ? 0.68 : 1,
-                            transition: "all 0.15s ease",
-                          }}
-                        >
-                          <strong>Basic {skill.level}</strong> — {skill.name}
-                        </span>
-                      }
-                    />
-                  </div>
-                );
-              })}
+                    <strong>Basic {skill.level}</strong> — {skill.name}
+                  </span>
+                }
+              />
             </div>
-                    ) : (
-            <>
-              
-              {skills.length > 0 ? (
-                <div className="d-grid mb-3" style={{ gap: 8 }}>
-                  {skills.map((skill) => (
-                    <SkillRow
-                      key={`${role}-edit-${skill.id}`}
-                      skill={skill}
-                      removable
-                      disabled={saving}
-                      isNew={!originalSkillIds.has(skill.id)}
-                      onRemove={() => onRemoveSkill(role, skill.id)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
-              )}
-            </>
-          )}
-        </div>
+          );
+        })}
+      </div>
+    )
+  ) : (
+    <DroppableSkillArea role={role} isEmpty={skills.length === 0}>
+      <SortableContext
+        items={skills.map((skill) => `${role}:${skill.id}`)}
+        strategy={verticalListSortingStrategy}
+      >
+        {skills.length > 0 ? (
+          <div className="d-grid mb-3" style={{ gap: 8, touchAction: "pan-y" }}>
+            {skills.map((skill) => (
+              <DraggableSkillRow
+                key={`${role}-edit-${skill.id}`}
+                skill={skill}
+                role={role}
+                removable
+                disabled={saving}
+                isNew={!originalSkillIds.has(skill.id)}
+                onRemove={() => onRemoveSkill(role, skill.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div
+            className="border rounded-3 px-3 py-4 text-center text-muted"
+            style={{
+              background: "#fbfbfd",
+              borderColor: "#e9ecef",
+              fontSize: 14,
+            }}
+          >
+            Drop skills here
+          </div>
+        )}
+      </SortableContext>
+    </DroppableSkillArea>
+  )}
+</div>
+          
 
         <div>
           <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
@@ -621,10 +789,65 @@ function UnsavedChangesModal({ show, saving, onSave, onDiscard, onKeepEditing })
   );
 }
 
+function SkillDnDWrapper({
+  children,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  activeSkill,
+  disabled = false,
+}) {
+ const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,
+    },
+  }),
+  useSensor(TouchSensor, {
+    activationConstraint: {
+      delay: 150,
+      tolerance: 12,
+    },
+  }),
+  useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates,
+  })
+);
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={disabled ? undefined : onDragStart}
+      onDragOver={disabled ? undefined : onDragOver}
+      onDragEnd={disabled ? undefined : onDragEnd}
+    >
+      {children}
+
+      <DragOverlay>
+        {activeSkill ? (
+          <div style={{ width: "100%" }}>
+            <DraggableSkillRow
+              skill={activeSkill.skill}
+              role={activeSkill.role}
+              removable={false}
+              disabled
+              isNew={activeSkill.isNew}
+              isOverlay
+            />
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
 class LessonPlanShow extends Component {
   state = {
     lessonPlan: null,
     skills: [],
+
+    activeDragSkill: null,
 
     draftSkillsByRole: {
       main: [],
@@ -709,6 +932,163 @@ class LessonPlanShow extends Component {
       _isNew: false,
     }));
 
+  findSkillContainer = (itemId) => {
+    const { draftSkillsByRole } = this.state;
+
+    for (const role of Object.keys(draftSkillsByRole)) {
+      const found = (draftSkillsByRole[role] || []).some((skill) => `${role}:${skill.id}` === itemId);
+      if (found) return role;
+    }
+
+    return null;
+  };
+
+handleDragEnd = ({ active, over }) => {
+  const activeId = String(active.id);
+
+  if (!over) {
+    this.setState({ activeDragSkill: null });
+    return;
+  }
+
+  const overId = String(over.id);
+
+  const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+  const overRole = this.findRoleFromOver(over);
+
+  if (!activeRole || !overRole) {
+    this.setState({ activeDragSkill: null });
+    return;
+  }
+
+  if (activeRole === overRole && activeId !== overId) {
+    this.setState((prev) => {
+      const items = [...(prev.draftSkillsByRole[activeRole] || [])];
+      const oldIndex = this.findSkillIndex(items, activeRole, activeId);
+      const rawNewIndex =
+  Object.values(ROLE).includes(overId)
+    ? items.length
+    : this.findSkillIndex(items, overRole, overId);
+
+if (oldIndex === -1 || rawNewIndex === -1 || oldIndex === rawNewIndex) {
+  return { activeDragSkill: null };
+}
+
+const [moved] = items.splice(oldIndex, 1);
+const safeNewIndex = Math.max(0, Math.min(rawNewIndex, items.length));
+items.splice(safeNewIndex, 0, moved);
+
+      return {
+        draftSkillsByRole: {
+          ...prev.draftSkillsByRole,
+          [activeRole]: items,
+        },
+        success: null,
+        error: null,
+        activeDragSkill: null,
+      };
+    });
+    return;
+  }
+
+  this.setState({ activeDragSkill: null });
+};
+
+handleDragOver = ({ active, over }) => {
+  if (!over) return;
+
+  const activeId = String(active.id);
+  const overId = String(over.id);
+
+  const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+  const overRole = this.findRoleFromOver(over);
+
+  if (!activeRole || !overRole) return;
+  if (activeRole === overRole) return;
+
+  this.setState((prev) => {
+    const nextByRole = {
+      ...prev.draftSkillsByRole,
+      main: [...(prev.draftSkillsByRole.main || [])],
+      warmup: [...(prev.draftSkillsByRole.warmup || [])],
+      cooldown: [...(prev.draftSkillsByRole.cooldown || [])],
+    };
+
+    const sourceItems = nextByRole[activeRole];
+    const targetItems = nextByRole[overRole];
+
+    const sourceIndex = this.findSkillIndex(sourceItems, activeRole, activeId);
+    if (sourceIndex === -1) return null;
+
+    const existingTargetIndex = this.findSkillIndex(targetItems, overRole, activeId);
+    if (existingTargetIndex !== -1) return null;
+
+    const [movedSkill] = sourceItems.splice(sourceIndex, 1);
+
+    const targetIndex = Object.values(ROLE).includes(overId)
+      ? targetItems.length
+      : this.findSkillIndex(targetItems, overRole, overId);
+
+    if (targetIndex < 0) {
+      targetItems.push(movedSkill);
+    } else {
+      targetItems.splice(targetIndex, 0, movedSkill);
+    }
+
+    return {
+      draftSkillsByRole: nextByRole,
+      success: null,
+      error: null,
+    };
+  });
+};
+
+getRoleItems = (draftSkillsByRole, role) => [...(draftSkillsByRole[role] || [])];
+
+findSkillIndex = (items, role, id) =>
+  items.findIndex((skill) => `${role}:${skill.id}` === id);
+
+findRoleFromOver = (over) => {
+  if (!over) return null;
+
+  const overId = String(over.id);
+
+  if (Object.values(ROLE).includes(overId)) return overId;
+
+  if (over.data?.current?.role) return over.data.current.role;
+
+  return this.findSkillContainer(overId);
+};
+
+handleDragStart = ({ active }) => {
+  const activeId = String(active.id);
+  const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+
+  if (!activeRole) return;
+
+  const items = this.state.draftSkillsByRole[activeRole] || [];
+  const skill = items.find((s) => `${activeRole}:${s.id}` === activeId);
+
+  if (!skill) return;
+
+  const originalSkills =
+    activeRole === ROLE.MAIN
+      ? this.state.lessonPlan?.main_skills || this.state.lessonPlan?.skills || []
+      : activeRole === ROLE.WARMUP
+      ? this.state.lessonPlan?.warmup_skills || []
+      : this.state.lessonPlan?.cooldown_skills || [];
+
+  const originalSkillIds = new Set(originalSkills.map((s) => s.id));
+
+  this.setState({
+    activeDragSkill: {
+      role: activeRole,
+      skill,
+      isNew: !originalSkillIds.has(skill.id),
+    },
+  });
+};
+
   hasUnsavedChanges = () => {
     const { lessonPlan, isEditing } = this.state;
     if (!isEditing || !lessonPlan) return false;
@@ -728,9 +1108,9 @@ class LessonPlanShow extends Component {
       this.buildDraftOccurrencesFromLessonPlan(lessonPlan)
     );
 
-    const mainSkillsChanged = !skillIdsEqual(this.state.draftSkillsByRole.main, originalMain);
-    const warmupSkillsChanged = !skillIdsEqual(this.state.draftSkillsByRole.warmup, originalWarmup);
-    const cooldownSkillsChanged = !skillIdsEqual(this.state.draftSkillsByRole.cooldown, originalCooldown);
+    const mainSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.main, originalMain);
+const warmupSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.warmup, originalWarmup);
+const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cooldown, originalCooldown);
 
     return (
       titleChanged ||
@@ -982,16 +1362,6 @@ class LessonPlanShow extends Component {
       draftSkillsByRole,
     } = this.state;
 
-    const payload = {
-      lesson_plan: {
-        title: (title || "").trim(),
-        description: (description || "").trim(),
-        warmup_notes: (warmupNotes ?? "").trim() || null,
-        main_notes: (mainNotes ?? "").trim() || null,
-        cooldown_notes: (cooldownNotes ?? "").trim() || null,
-      },
-    };
-
     const original = {
       main: lessonPlan?.main_skills || lessonPlan?.skills || [],
       warmup: lessonPlan?.warmup_skills || [],
@@ -1045,6 +1415,44 @@ class LessonPlanShow extends Component {
       (occ) => String(occ.id).startsWith("temp-") || occ._isNew
     );
 
+    const dedupeSkills = (arr) => {
+  const seen = new Set();
+  return (arr || []).filter((skill) => {
+    if (seen.has(skill.id)) return false;
+    seen.add(skill.id);
+    return true;
+  });
+};
+
+const orderedSkillsByRole = {
+  main: dedupeSkills(draftSkillsByRole.main).map((s, index) => ({
+    skill_id: s.id,
+    role: "main",
+    position: index,
+  })),
+  warmup: dedupeSkills(draftSkillsByRole.warmup).map((s, index) => ({
+    skill_id: s.id,
+    role: "warmup",
+    position: index,
+  })),
+  cooldown: dedupeSkills(draftSkillsByRole.cooldown).map((s, index) => ({
+    skill_id: s.id,
+    role: "cooldown",
+    position: index,
+  })),
+};
+
+const payload = {
+  lesson_plan: {
+    title: (title || "").trim(),
+    description: (description || "").trim(),
+    warmup_notes: (warmupNotes ?? "").trim() || null,
+    main_notes: (mainNotes ?? "").trim() || null,
+    cooldown_notes: (cooldownNotes ?? "").trim() || null,
+    ordered_skills_by_role: orderedSkillsByRole,
+  },
+};
+
     this.setState({
       saving: true,
       error: null,
@@ -1054,36 +1462,36 @@ class LessonPlanShow extends Component {
     });
 
     try {
-      await api.patch(`/lesson_plans/${id}`, payload);
-
       for (const skillId of removedByRole.main) {
-        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "main" } });
-      }
-      for (const skillId of removedByRole.warmup) {
-        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "warmup" } });
-      }
-      for (const skillId of removedByRole.cooldown) {
-        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "cooldown" } });
-      }
+  await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "main" } });
+}
+for (const skillId of removedByRole.warmup) {
+  await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "warmup" } });
+}
+for (const skillId of removedByRole.cooldown) {
+  await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "cooldown" } });
+}
 
-      if (addedByRole.main.length) {
-        await api.post(`/lesson_plans/${id}/add_skills`, {
-          skill_ids: addedByRole.main,
-          role: "main",
-        });
-      }
-      if (addedByRole.warmup.length) {
-        await api.post(`/lesson_plans/${id}/add_skills`, {
-          skill_ids: addedByRole.warmup,
-          role: "warmup",
-        });
-      }
-      if (addedByRole.cooldown.length) {
-        await api.post(`/lesson_plans/${id}/add_skills`, {
-          skill_ids: addedByRole.cooldown,
-          role: "cooldown",
-        });
-      }
+if (addedByRole.main.length) {
+  await api.post(`/lesson_plans/${id}/add_skills`, {
+    skill_ids: addedByRole.main,
+    role: "main",
+  });
+}
+if (addedByRole.warmup.length) {
+  await api.post(`/lesson_plans/${id}/add_skills`, {
+    skill_ids: addedByRole.warmup,
+    role: "warmup",
+  });
+}
+if (addedByRole.cooldown.length) {
+  await api.post(`/lesson_plans/${id}/add_skills`, {
+    skill_ids: addedByRole.cooldown,
+    role: "cooldown",
+  });
+}
+
+await api.patch(`/lesson_plans/${id}`, payload);
 
       for (const occurrenceId of removedOccurrenceIds) {
         await api.delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`);
@@ -1151,20 +1559,20 @@ class LessonPlanShow extends Component {
   };
 
   toggleAddSkill = (role, skill) => {
-    this.setState((prev) => {
-      const current = prev.draftSkillsByRole[role] || [];
-      const exists = current.some((s) => s.id === skill.id);
+  this.setState((prev) => {
+    const current = prev.draftSkillsByRole[role] || [];
+    const exists = current.some((s) => s.id === skill.id);
 
-      return {
-        draftSkillsByRole: {
-          ...prev.draftSkillsByRole,
-          [role]: exists ? current.filter((s) => s.id !== skill.id) : [...current, skill],
-        },
-        success: null,
-        error: null,
-      };
-    });
-  };
+    return {
+      draftSkillsByRole: {
+        ...prev.draftSkillsByRole,
+        [role]: exists ? current : [...current, skill],
+      },
+      success: null,
+      error: null,
+    };
+  });
+};
 
   clearAddedSelections = (role, availableSkills) => {
     const availableIds = new Set((availableSkills || []).map((s) => s.id));
@@ -1731,77 +2139,82 @@ class LessonPlanShow extends Component {
             </Card>
           </div>
 
-          <div id="section-warmup" tabIndex="-1">
-            <LessonSectionCard
-              title="Warm-up"
-              role={ROLE.WARMUP}
-              skills={warmupSkills}
-              notes={this.state.warmupNotes}
-              isEditing={isEditing}
-              saving={saving}
-              onNotesChange={(value) => this.setState({ warmupNotes: value })}
-              onRemoveSkill={this.removeSkill}
-              taughtIds={taughtSkillIdsByRole.warmup}
-              onToggleTaught={this.toggleTaught}
-              allSkills={skills}
-              addSkillsOpen={addSkillsOpenByRole.warmup}
-              searchQuery={skillSearchByRole.warmup}
-              onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
-              onSearchChange={this.changeSkillSearch}
-              onClearSearch={this.clearSkillSearch}
-              onToggleAddSkill={this.toggleAddSkill}
-              onClearAddedSelections={this.clearAddedSelections}
-              originalSkillIds={new Set(originalWarmupSkills.map((s) => s.id))}
-            />
-          </div>
+          <SkillDnDWrapper
+  onDragStart={this.handleDragStart}
+  onDragOver={this.handleDragOver}
+  onDragEnd={this.handleDragEnd}
+  activeSkill={this.state.activeDragSkill}
+  disabled={!isEditing || saving}
+>
+  <div id="section-warmup" tabIndex="-1">
+    <LessonSectionCard
+      title="Warm-up"
+      role={ROLE.WARMUP}
+      skills={warmupSkills}
+      notes={this.state.warmupNotes}
+      isEditing={isEditing}
+      saving={saving}
+      onNotesChange={(value) => this.setState({ warmupNotes: value })}
+      onRemoveSkill={this.removeSkill}
+      taughtIds={taughtSkillIdsByRole.warmup}
+      onToggleTaught={this.toggleTaught}
+      allSkills={skills}
+      addSkillsOpen={addSkillsOpenByRole.warmup}
+      searchQuery={skillSearchByRole.warmup}
+      onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+      onSearchChange={this.changeSkillSearch}
+      onClearSearch={this.clearSkillSearch}
+      onToggleAddSkill={this.toggleAddSkill}
+      originalSkillIds={new Set(originalWarmupSkills.map((s) => s.id))}
+    />
+  </div>
 
-          <div id="section-main" tabIndex="-1">
-            <LessonSectionCard
-              title="Main Lesson"
-              role={ROLE.MAIN}
-              skills={mainSkills}
-              notes={this.state.mainNotes}
-              isEditing={isEditing}
-              saving={saving}
-              onNotesChange={(value) => this.setState({ mainNotes: value })}
-              onRemoveSkill={this.removeSkill}
-              taughtIds={taughtSkillIdsByRole.main}
-              onToggleTaught={this.toggleTaught}
-              allSkills={skills}
-              addSkillsOpen={addSkillsOpenByRole.main}
-              searchQuery={skillSearchByRole.main}
-              onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
-              onSearchChange={this.changeSkillSearch}
-              onClearSearch={this.clearSkillSearch}
-              onToggleAddSkill={this.toggleAddSkill}
-              onClearAddedSelections={this.clearAddedSelections}
-              originalSkillIds={new Set(originalMainSkills.map((s) => s.id))}
-            />
-          </div>
+  <div id="section-main" tabIndex="-1">
+    <LessonSectionCard
+      title="Main Lesson"
+      role={ROLE.MAIN}
+      skills={mainSkills}
+      notes={this.state.mainNotes}
+      isEditing={isEditing}
+      saving={saving}
+      onNotesChange={(value) => this.setState({ mainNotes: value })}
+      onRemoveSkill={this.removeSkill}
+      taughtIds={taughtSkillIdsByRole.main}
+      onToggleTaught={this.toggleTaught}
+      allSkills={skills}
+      addSkillsOpen={addSkillsOpenByRole.main}
+      searchQuery={skillSearchByRole.main}
+      onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+      onSearchChange={this.changeSkillSearch}
+      onClearSearch={this.clearSkillSearch}
+      onToggleAddSkill={this.toggleAddSkill}
+      originalSkillIds={new Set(originalMainSkills.map((s) => s.id))}
+    />
+  </div>
 
-          <div id="section-cooldown" tabIndex="-1">
-            <LessonSectionCard
-              title="Cool-down"
-              role={ROLE.COOLDOWN}
-              skills={cooldownSkills}
-              notes={this.state.cooldownNotes}
-              isEditing={isEditing}
-              saving={saving}
-              onNotesChange={(value) => this.setState({ cooldownNotes: value })}
-              onRemoveSkill={this.removeSkill}
-              taughtIds={taughtSkillIdsByRole.cooldown}
-              onToggleTaught={this.toggleTaught}
-              allSkills={skills}
-              addSkillsOpen={addSkillsOpenByRole.cooldown}
-              searchQuery={skillSearchByRole.cooldown}
-              onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
-              onSearchChange={this.changeSkillSearch}
-              onClearSearch={this.clearSkillSearch}
-              onToggleAddSkill={this.toggleAddSkill}
-              onClearAddedSelections={this.clearAddedSelections}
-              originalSkillIds={new Set(originalCooldownSkills.map((s) => s.id))}
-            />
-          </div>
+  <div id="section-cooldown" tabIndex="-1">
+    <LessonSectionCard
+      title="Cool-down"
+      role={ROLE.COOLDOWN}
+      skills={cooldownSkills}
+      notes={this.state.cooldownNotes}
+      isEditing={isEditing}
+      saving={saving}
+      onNotesChange={(value) => this.setState({ cooldownNotes: value })}
+      onRemoveSkill={this.removeSkill}
+      taughtIds={taughtSkillIdsByRole.cooldown}
+      onToggleTaught={this.toggleTaught}
+      allSkills={skills}
+      addSkillsOpen={addSkillsOpenByRole.cooldown}
+      searchQuery={skillSearchByRole.cooldown}
+      onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+      onSearchChange={this.changeSkillSearch}
+      onClearSearch={this.clearSkillSearch}
+      onToggleAddSkill={this.toggleAddSkill}
+      originalSkillIds={new Set(originalCooldownSkills.map((s) => s.id))}
+    />
+  </div>
+</SkillDnDWrapper>
 
           <div id="section-scheduler" tabIndex="-1" style={{ scrollMarginTop: 24 }}>
             {isEditing ? (
