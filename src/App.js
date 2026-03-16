@@ -21,6 +21,7 @@ import StudentsIndex from "./components/StudentsIndex";
 import StudentShow from "./components/StudentShow";
 import StudentNew from "./components/StudentNew";
 import AdminUsersPage from "./components/AdminUsersPage";
+import ClassSessionsPage from "./components/ClassSessionsPage";
 
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL;
@@ -203,6 +204,16 @@ export default class App extends Component {
           <Route path="/students/:id" element={<StudentShow currentUser={this.state.currentUser}/>} />
           <Route path="/students/new" element={<StudentNew currentUser={this.state.currentUser} />} />
 
+
+          <Route
+              path="/attendance"
+              element={
+                !this.state.authChecked ? null :
+                this.state.loggedInStatus === "LOGGED_IN"
+                  ? <ClassSessionsPage currentUser={this.state.currentUser}/>
+                  : <Navigate to="/" replace />
+              }
+            />
 
 
           <Route
