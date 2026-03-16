@@ -142,7 +142,7 @@ export default function RosterLessonPlanSchedulerCard({
               Lesson Planning
             </div>
             <div className="fw-semibold" style={{ fontSize: 20 }}>
-              Look Ahead
+              Upcoming Lessons
             </div>
             <div className="text-muted mt-1" style={{ fontSize: 13 }}>
               Pick a lesson plan, then choose an upcoming class time to schedule it.
