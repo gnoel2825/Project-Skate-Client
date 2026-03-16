@@ -46,11 +46,28 @@ const weekdayShort = (n) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][Nu
 
 const formatTimeHHMM = (v) => {
   if (!v) return "";
+
+  // Case 1: backend sends "09:00" or "09:00:00"
   if (typeof v === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(v)) {
     const [hh, mm] = v.split(":").map(Number);
-    const dt = new Date(2000, 0, 1, hh, mm || 0, 0);
-    return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const hour = hh % 12 || 12;
+    const suffix = hh >= 12 ? "PM" : "AM";
+    return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
   }
+
+  // Case 2: backend sends ISO like "2000-01-01T09:00:00.000Z"
+  if (typeof v === "string") {
+    const match = v.match(/T(\d{2}):(\d{2})/);
+    if (match) {
+      const hh = Number(match[1]);
+      const mm = Number(match[2]);
+      const hour = hh % 12 || 12;
+      const suffix = hh >= 12 ? "PM" : "AM";
+      return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
+    }
+  }
+
+  // Fallback for anything else
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
