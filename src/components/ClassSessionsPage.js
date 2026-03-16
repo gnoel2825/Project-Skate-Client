@@ -32,11 +32,26 @@ function formatLongDate(value) {
 
 function formatShortTime(value) {
   if (!value) return "";
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(String(value))) {
-    const [hh, mm] = String(value).split(":").map(Number);
-    const dt = new Date(2000, 0, 1, hh, mm || 0, 0);
-    return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  if (typeof value === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(value.trim())) {
+    const [hh, mm] = value.trim().split(":").map(Number);
+    const hour = hh % 12 || 12;
+    const suffix = hh >= 12 ? "PM" : "AM";
+    return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
   }
+
+  if (typeof value === "string") {
+    const match = value.match(/(?:T|\s)(\d{2}):(\d{2})(?::\d{2})?/);
+    if (match) {
+      const hh = Number(match[1]);
+      const mm = Number(match[2]);
+      const hour = hh % 12 || 12;
+      const suffix = hh >= 12 ? "PM" : "AM";
+      return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
+    }
+    return String(value);
+  }
+
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return String(value);
   return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -103,31 +118,151 @@ function normalizeAttendanceRowsFromOccurrence(session) {
 
 function sessionDisplayTitle(session) {
   const rosterName = session?.matching_rosters?.[0]?.name;
+  const explicitRosterName = session?.roster?.name;
+  const titleRoster = explicitRosterName || rosterName;
   const timeLabel = formatShortTime(session?.starts_at);
 
-  if (timeLabel && rosterName) return `Session at ${timeLabel} • ${rosterName}`;
+  if (timeLabel && titleRoster) return `Session at ${timeLabel} • ${titleRoster}`;
   if (timeLabel) return `Session at ${timeLabel}`;
-  if (rosterName) return `Session • ${rosterName}`;
+  if (titleRoster) return `Session • ${titleRoster}`;
   return "Class Session";
 }
 
-function skillPreview(session) {
-  const lessonPlan = session?.lesson_plan || {};
-  const warmup = lessonPlan.warmup_skills || [];
-  const main = lessonPlan.skills || [];
-  const cooldown = lessonPlan.cooldown_skills || [];
+function parseTimeToMinutes(value) {
+  if (!value) return null;
 
-  const all = [...warmup, ...main, ...cooldown];
-  const unique = [];
-  const seen = new Set();
+  if (typeof value === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(value.trim())) {
+    const [hh, mm] = value.trim().split(":").map(Number);
+    return hh * 60 + mm;
+  }
 
-  all.forEach((skill) => {
-    if (seen.has(skill.id)) return;
-    seen.add(skill.id);
-    unique.push(skill);
-  });
+  if (typeof value === "string") {
+    const match = value.match(/(?:T|\s)(\d{2}):(\d{2})(?::\d{2})?/);
+    if (match) return Number(match[1]) * 60 + Number(match[2]);
+  }
 
-  return unique.slice(0, 6);
+  const dt = new Date(value);
+  if (!Number.isNaN(dt.getTime())) return dt.getHours() * 60 + dt.getMinutes();
+
+  return null;
+}
+
+function weekdayFromDate(value) {
+  if (!value) return null;
+  const [y, m, d] = String(value).split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.getDay();
+}
+
+function rosterScheduleLabel(roster) {
+  const sch = Array.isArray(roster?.roster_schedules) ? roster.roster_schedules : [];
+  if (!sch.length) return "No weekly schedule";
+
+  const weekdayShort = (n) =>
+    ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][Number(n)] || "";
+
+  return sch
+    .slice(0, 2)
+    .map((s) => {
+      const day = weekdayShort(s.weekday);
+      const time = formatTimeRange(s.starts_at, s.ends_at);
+      return [day, time].filter(Boolean).join(" ");
+    })
+    .join(" • ");
+}
+
+function getCandidateRosters(session, allRosters) {
+  const targetWeekday = weekdayFromDate(session?.taught_on);
+  const targetStart = parseTimeToMinutes(session?.starts_at);
+  const targetEnd = parseTimeToMinutes(session?.ends_at);
+
+  if (targetWeekday == null || targetStart == null || targetEnd == null) return [];
+
+  const exactIds = new Set((session?.matching_rosters || []).map((r) => r.id));
+  if (session?.roster_id) exactIds.add(session.roster_id);
+
+  return (allRosters || [])
+    .filter((roster) => !exactIds.has(roster.id))
+    .map((roster) => {
+      const schedules = Array.isArray(roster?.roster_schedules) ? roster.roster_schedules : [];
+      const sameDay = schedules.filter((s) => Number(s.weekday) === Number(targetWeekday));
+      if (!sameDay.length) return null;
+
+      const closest = sameDay
+        .map((s) => {
+          const sStart = parseTimeToMinutes(s.starts_at);
+          const sEnd = parseTimeToMinutes(s.ends_at);
+          if (sStart == null || sEnd == null) return null;
+
+          const distance = Math.abs(sStart - targetStart) + Math.abs(sEnd - targetEnd);
+
+          return { roster, schedule: s, distance };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.distance - b.distance)[0];
+
+      return closest || null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 6);
+}
+
+function getSessionStatus(session, allRosters) {
+  const hasExplicitRoster = !!session?.roster_id;
+  const hasMatchingRoster = (session?.matching_rosters || []).length > 0;
+  const candidates = getCandidateRosters(session, allRosters);
+
+  if (hasExplicitRoster || hasMatchingRoster) return "ready";
+  if (candidates.length > 0) return "needs_rescheduling";
+  return "needs_roster";
+}
+
+function sessionStatusMeta(status) {
+  switch (status) {
+    case "ready":
+      return {
+        label: "Ready",
+        bg: "rgba(25,135,84,0.10)",
+        border: "rgba(25,135,84,0.2)",
+        color: "#198754",
+      };
+    case "needs_rescheduling":
+      return {
+        label: "Needs rescheduling",
+        bg: "rgba(255,193,7,0.14)",
+        border: "rgba(255,193,7,0.22)",
+        color: "#9a6700",
+      };
+    default:
+      return {
+        label: "Needs roster",
+        bg: "rgba(220,53,69,0.08)",
+        border: "rgba(220,53,69,0.18)",
+        color: "#dc3545",
+      };
+  }
+}
+
+function SessionStatusBadge({ status }) {
+  const meta = sessionStatusMeta(status);
+  return (
+    <span
+      style={{
+        fontSize: 12,
+        fontWeight: 700,
+        padding: "4px 10px",
+        borderRadius: 999,
+        background: meta.bg,
+        border: `1px solid ${meta.border}`,
+        color: meta.color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {meta.label}
+    </span>
+  );
 }
 
 function AttendancePill({ active, children, onClick, disabled, variant = "outline-secondary" }) {
@@ -145,21 +280,28 @@ function AttendancePill({ active, children, onClick, disabled, variant = "outlin
   );
 }
 
-function SessionSummaryCard({ session }) {
+function SessionSummaryCard({ session, allRosters, onJumpToResolution }) {
   const lessonPlan = session?.lesson_plan || {};
-  const previewSkills = skillPreview(session);
   const attendanceSummary = session?.attendance_summary || {};
+  const status = getSessionStatus(session, allRosters);
+  const linkedRoster = session?.matching_rosters?.[0] || null;
 
   return (
     <Card className="border-0 shadow-sm mb-3">
       <Card.Body>
-        <div className="d-flex flex-column flex-lg-row justify-content-between gap-3">
-          <div>
-            <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, letterSpacing: 0.6 }}>
-              Class Session
+        <div className="d-flex flex-column flex-xl-row justify-content-between gap-3">
+          <div style={{ minWidth: 0 }}>
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+              <div
+                className="text-uppercase text-muted"
+                style={{ fontSize: 11, letterSpacing: 0.6 }}
+              >
+                Class Session
+              </div>
+              <SessionStatusBadge status={status} />
             </div>
 
-            <div className="fw-semibold" style={{ fontSize: 22, lineHeight: 1.2 }}>
+            <div className="fw-semibold" style={{ fontSize: 24, lineHeight: 1.15 }}>
               {sessionDisplayTitle(session)}
             </div>
 
@@ -169,6 +311,46 @@ function SessionSummaryCard({ session }) {
                 ? ` • ${formatTimeRange(session.starts_at, session.ends_at)}`
                 : ""}
               {session.location ? ` • ${session.location}` : ""}
+            </div>
+
+            <div className="d-flex flex-wrap gap-2 mt-3">
+              {lessonPlan?.id ? (
+                <Button
+                  as={Link}
+                  to={`/lesson-plans/${lessonPlan.id}`}
+                  size="sm"
+                  variant="outline-secondary"
+                  className="rounded-pill px-3"
+                  style={{ fontSize: 12 }}
+                >
+                  Open Lesson Plan
+                </Button>
+              ) : null}
+
+              {linkedRoster?.id ? (
+                <Button
+                  as={Link}
+                  to={`/rosters/${linkedRoster.id}`}
+                  size="sm"
+                  variant="outline-secondary"
+                  className="rounded-pill px-3"
+                  style={{ fontSize: 12 }}
+                >
+                  Open Roster
+                </Button>
+              ) : null}
+
+              {status !== "ready" ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="rounded-pill px-3"
+                  style={{ fontSize: 12 }}
+                  onClick={onJumpToResolution}
+                >
+                  Resolve Session
+                </Button>
+              ) : null}
             </div>
           </div>
 
@@ -184,15 +366,30 @@ function SessionSummaryCard({ session }) {
               <div className="text-muted" style={{ fontSize: 12 }}>
                 Lesson Plan
               </div>
-             <div className="fw-semibold">
-  {lessonPlan?.id ? (
-    <Link to={`/lesson-plans/${lessonPlan.id}`} className="text-decoration-none">
-      {lessonPlan.title || "Untitled lesson plan"}
-    </Link>
-  ) : (
-    lessonPlan.title || "No lesson plan title"
-  )}
-</div>
+              <div className="fw-semibold">
+                {lessonPlan?.id ? (
+                  <Link to={`/lesson-plans/${lessonPlan.id}`} className="text-decoration-none">
+                    {lessonPlan.title || "Untitled lesson plan"}
+                  </Link>
+                ) : (
+                  lessonPlan.title || "Untitled lesson plan"
+                )}
+              </div>
+            </div>
+
+            <div className="mb-2" style={{ fontSize: 14 }}>
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                Roster
+              </div>
+              <div className="fw-semibold">
+                {linkedRoster?.id ? (
+                  <Link to={`/rosters/${linkedRoster.id}`} className="text-decoration-none">
+                    {linkedRoster.name}
+                  </Link>
+                ) : (
+                  "Not linked yet"
+                )}
+              </div>
             </div>
 
             {lessonPlan.description ? (
@@ -294,6 +491,7 @@ function RosterAttendanceCard({
   onChangeStatus,
   onChangeNotes,
   onSave,
+  onMarkAllPresent,
 }) {
   const rosters = session?.matching_rosters || [];
 
@@ -325,16 +523,29 @@ function RosterAttendanceCard({
             )}
           </div>
 
-          <Button
-            size="sm"
-            variant={dirty ? "primary" : "secondary"}
-            className="rounded-pill px-3 align-self-start"
-            style={{ fontSize: 12 }}
-            onClick={onSave}
-            disabled={saving || !dirty}
-          >
-            {saving ? "Saving..." : dirty ? "Save Attendance" : "Saved"}
-          </Button>
+          <div className="d-flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline-secondary"
+              className="rounded-pill px-3"
+              style={{ fontSize: 12 }}
+              onClick={onMarkAllPresent}
+              disabled={saving || rows.length === 0}
+            >
+              Mark All Present
+            </Button>
+
+            <Button
+              size="sm"
+              variant={dirty ? "primary" : "secondary"}
+              className="rounded-pill px-3"
+              style={{ fontSize: 12 }}
+              onClick={onSave}
+              disabled={saving || !dirty}
+            >
+              {saving ? "Saving..." : dirty ? "Save Attendance" : "Saved"}
+            </Button>
+          </div>
         </div>
 
         {rows.length === 0 ? (
@@ -368,10 +579,7 @@ function RosterAttendanceCard({
 
                       <div style={{ minWidth: 0 }}>
                         <div className="fw-semibold" style={{ fontSize: 14 }}>
-                          <Link
-                            to={`/students/${row.student_id}`}
-                            className="text-decoration-none"
-                          >
+                          <Link to={`/students/${row.student_id}`} className="text-decoration-none">
                             {fullName(row)}
                           </Link>
                         </div>
@@ -443,24 +651,283 @@ function RosterAttendanceCard({
   );
 }
 
+function SessionResolutionCard({
+  session,
+  allRosters,
+  resolving,
+  onLinkRoster,
+  onCreateMeetingAndLink,
+  onReschedule,
+}) {
+  const candidates = getCandidateRosters(session, allRosters);
+  const status = getSessionStatus(session, allRosters);
+  const [selectedRosterId, setSelectedRosterId] = useState(
+    session?.matching_rosters?.[0]?.id || candidates[0]?.roster?.id || ""
+  );
+  const [rescheduleDate, setRescheduleDate] = useState(session?.taught_on || "");
+  const [rescheduleStart, setRescheduleStart] = useState(
+    typeof session?.starts_at === "string" && /^\d{2}:\d{2}/.test(session.starts_at)
+      ? session.starts_at.slice(0, 5)
+      : ""
+  );
+  const [rescheduleEnd, setRescheduleEnd] = useState(
+    typeof session?.ends_at === "string" && /^\d{2}:\d{2}/.test(session.ends_at)
+      ? session.ends_at.slice(0, 5)
+      : ""
+  );
+
+  const rosterOptions = useMemo(() => {
+    const used = new Set();
+    const merged = [];
+
+    candidates.forEach((c) => {
+      if (!used.has(c.roster.id)) {
+        used.add(c.roster.id);
+        merged.push(c.roster);
+      }
+    });
+
+    (allRosters || []).forEach((roster) => {
+      if (!used.has(roster.id)) {
+        used.add(roster.id);
+        merged.push(roster);
+      }
+    });
+
+    return merged;
+  }, [allRosters, candidates]);
+
+  return (
+    <Card className="border-0 shadow-sm mb-3">
+      <Card.Body>
+        <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+          <div>
+            <div className="text-uppercase text-muted mb-1" style={{ fontSize: 11, letterSpacing: 0.6 }}>
+              Session Resolution
+            </div>
+            <div className="fw-semibold" style={{ fontSize: 20 }}>
+              {status === "needs_rescheduling"
+                ? "This session likely needs to be rescheduled to match a roster"
+                : "This session needs a roster before attendance can be taken"}
+            </div>
+            <div className="text-muted mt-2" style={{ fontSize: 14 }}>
+              Link this lesson plan occurrence to a roster, create a one-off meeting for the roster,
+              or reschedule the occurrence so it aligns with the intended class time.
+            </div>
+          </div>
+
+          <div className="align-self-start">
+            <SessionStatusBadge status={status} />
+          </div>
+        </div>
+
+        {candidates.length > 0 ? (
+          <div
+            className="border rounded-4 p-3 mb-3"
+            style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
+          >
+            <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+              Suggested rosters
+            </div>
+
+            <div className="d-grid" style={{ gap: 10 }}>
+              {candidates.map((candidate) => (
+                <div
+                  key={candidate.roster.id}
+                  className="border rounded-3 p-3"
+                  style={{ background: "#fff", borderColor: "#e9ecef" }}
+                >
+                  <div className="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                    <div>
+                      <div className="fw-semibold">{candidate.roster.name}</div>
+                      <div className="text-muted" style={{ fontSize: 13 }}>
+                        {rosterScheduleLabel(candidate.roster)}
+                      </div>
+                      <div className="text-muted mt-1" style={{ fontSize: 12 }}>
+                        Close weekday/time match for this session.
+                      </div>
+                    </div>
+
+                    <div className="d-flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline-secondary"
+                        className="rounded-pill px-3"
+                        style={{ fontSize: 12 }}
+                        disabled={resolving}
+                        onClick={() => onLinkRoster(candidate.roster)}
+                      >
+                        Link to Roster
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        className="rounded-pill px-3"
+                        style={{ fontSize: 12 }}
+                        disabled={resolving}
+                        onClick={() => onCreateMeetingAndLink(candidate.roster)}
+                      >
+                        Add One-Off Meeting + Link
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <Row className="g-3">
+          <Col xl={6}>
+            <Card className="border h-100" style={{ borderColor: "#e9ecef" }}>
+              <Card.Body>
+                <div className="fw-semibold mb-2" style={{ fontSize: 15 }}>
+                  Link this session to a roster
+                </div>
+                <div className="text-muted mb-3" style={{ fontSize: 13 }}>
+                  Choose a roster now if this occurrence already belongs to a known class.
+                </div>
+
+                <Form.Select
+                  value={selectedRosterId}
+                  onChange={(e) => setSelectedRosterId(e.target.value)}
+                  style={{ borderRadius: 12 }}
+                  className="mb-3"
+                >
+                  <option value="">Choose a roster…</option>
+                  {rosterOptions.map((roster) => (
+                    <option key={roster.id} value={roster.id}>
+                      {roster.name} — {rosterScheduleLabel(roster)}
+                    </option>
+                  ))}
+                </Form.Select>
+
+                <div className="d-flex gap-2 flex-wrap">
+                  <Button
+                    variant="outline-secondary"
+                    className="rounded-pill px-3"
+                    style={{ fontSize: 12 }}
+                    disabled={resolving || !selectedRosterId}
+                    onClick={() => {
+                      const roster = rosterOptions.find((r) => String(r.id) === String(selectedRosterId));
+                      if (roster) onLinkRoster(roster);
+                    }}
+                  >
+                    Link to Roster
+                  </Button>
+
+                  <Button
+                    variant="primary"
+                    className="rounded-pill px-3"
+                    style={{ fontSize: 12 }}
+                    disabled={resolving || !selectedRosterId}
+                    onClick={() => {
+                      const roster = rosterOptions.find((r) => String(r.id) === String(selectedRosterId));
+                      if (roster) onCreateMeetingAndLink(roster);
+                    }}
+                  >
+                    Create One-Off Meeting + Link
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col xl={6}>
+            <Card className="border h-100" style={{ borderColor: "#e9ecef" }}>
+              <Card.Body>
+                <div className="fw-semibold mb-2" style={{ fontSize: 15 }}>
+                  Reschedule this session
+                </div>
+                <div className="text-muted mb-3" style={{ fontSize: 13 }}>
+                  If this was meant to line up with a roster by date/time, move it so it matches cleanly.
+                </div>
+
+                <Row className="g-2 mb-3">
+                  <Col md={4}>
+                    <Form.Control
+                      type="date"
+                      value={rescheduleDate}
+                      onChange={(e) => setRescheduleDate(e.target.value)}
+                      style={{ borderRadius: 12 }}
+                    />
+                  </Col>
+                  <Col md={4}>
+                    <Form.Control
+                      type="time"
+                      value={rescheduleStart}
+                      onChange={(e) => setRescheduleStart(e.target.value)}
+                      style={{ borderRadius: 12 }}
+                    />
+                  </Col>
+                  <Col md={4}>
+                    <Form.Control
+                      type="time"
+                      value={rescheduleEnd}
+                      onChange={(e) => setRescheduleEnd(e.target.value)}
+                      style={{ borderRadius: 12 }}
+                    />
+                  </Col>
+                </Row>
+
+                <Button
+                  variant="outline-secondary"
+                  className="rounded-pill px-3"
+                  style={{ fontSize: 12 }}
+                  disabled={resolving || !rescheduleDate || !rescheduleStart || !rescheduleEnd}
+                  onClick={() =>
+                    onReschedule({
+                      taught_on: rescheduleDate,
+                      starts_at: rescheduleStart,
+                      ends_at: rescheduleEnd,
+                    })
+                  }
+                >
+                  Reschedule Session
+                </Button>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      </Card.Body>
+    </Card>
+  );
+}
+
 export default function ClassSessionsDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialDate = searchParams.get("date") || ymd(new Date());
 
   const [date, setDate] = useState(initialDate);
   const [sessions, setSessions] = useState([]);
+  const [allRosters, setAllRosters] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
 
   const [attendanceDrafts, setAttendanceDrafts] = useState({});
   const [savingAttendance, setSavingAttendance] = useState(false);
+  const [resolvingSession, setResolvingSession] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const visibleSessions = useMemo(() => {
+    return sessions
+      .slice()
+      .sort((a, b) => {
+        const ta = parseTimeToMinutes(a.starts_at) ?? 99999;
+        const tb = parseTimeToMinutes(b.starts_at) ?? 99999;
+        return ta - tb;
+      });
+  }, [sessions]);
+
   const selectedSession = useMemo(
-    () => sessions.find((s) => String(s.id) === String(selectedSessionId)) || sessions[0] || null,
-    [sessions, selectedSessionId]
+    () =>
+      visibleSessions.find((s) => String(s.id) === String(selectedSessionId)) ||
+      visibleSessions[0] ||
+      null,
+    [visibleSessions, selectedSessionId]
   );
 
   useEffect(() => {
@@ -473,12 +940,16 @@ export default function ClassSessionsDashboard() {
     setSuccess("");
 
     try {
-      const res = await api.get("/lesson_plans_by_date", {
-        params: { date: targetDate },
-      });
+      const [sessionRes, rosterRes] = await Promise.all([
+        api.get("/lesson_plans_by_date", { params: { date: targetDate } }),
+        api.get("/rosters.json"),
+      ]);
 
-      const data = Array.isArray(res.data) ? res.data : [];
+      const data = Array.isArray(sessionRes.data) ? sessionRes.data : [];
+      const rosters = Array.isArray(rosterRes.data) ? rosterRes.data : [];
+
       setSessions(data);
+      setAllRosters(rosters);
 
       const drafts = {};
       data.forEach((session) => {
@@ -528,6 +999,18 @@ export default function ClassSessionsDashboard() {
     setError("");
   };
 
+  const markAllPresent = () => {
+    if (!selectedSession) return;
+
+    setAttendanceDrafts((prev) => ({
+      ...prev,
+      [selectedSession.id]: (prev[selectedSession.id] || []).map((row) => ({
+        ...row,
+        status: "present",
+      })),
+    }));
+  };
+
   const saveAttendance = async () => {
     if (!selectedSession) return;
 
@@ -556,9 +1039,97 @@ export default function ClassSessionsDashboard() {
     }
   };
 
+  const linkOccurrenceToRoster = async (roster) => {
+    if (!selectedSession || !roster) return;
+
+    setResolvingSession(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await api.patch(
+        `/lesson_plans/${selectedSession.lesson_plan.id}/lesson_plan_occurrences/${selectedSession.id}`,
+        {
+          lesson_plan_occurrence: {
+            roster_id: roster.id,
+          },
+        }
+      );
+
+      setSuccess(`Linked session to ${roster.name}.`);
+      await loadSessions(date);
+    } catch (err) {
+      setError(safeMessage(err, "Failed to link session to roster"));
+    } finally {
+      setResolvingSession(false);
+    }
+  };
+
+  const createOneOffMeetingAndLink = async (roster) => {
+    if (!selectedSession || !roster) return;
+
+    setResolvingSession(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await api.post(`/rosters/${roster.id}/roster_meetings`, {
+        roster_meeting: {
+          taught_on: selectedSession.taught_on,
+          starts_at: selectedSession.starts_at,
+          ends_at: selectedSession.ends_at,
+          location: selectedSession.location || "",
+        },
+      });
+
+      await api.patch(
+        `/lesson_plans/${selectedSession.lesson_plan.id}/lesson_plan_occurrences/${selectedSession.id}`,
+        {
+          lesson_plan_occurrence: {
+            roster_id: roster.id,
+          },
+        }
+      );
+
+      setSuccess(`Created one-off meeting and linked session to ${roster.name}.`);
+      await loadSessions(date);
+    } catch (err) {
+      setError(safeMessage(err, "Failed to create one-off meeting and link session"));
+    } finally {
+      setResolvingSession(false);
+    }
+  };
+
+  const rescheduleOccurrence = async (attrs) => {
+    if (!selectedSession) return;
+
+    setResolvingSession(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await api.patch(
+        `/lesson_plans/${selectedSession.lesson_plan.id}/lesson_plan_occurrences/${selectedSession.id}`,
+        {
+          lesson_plan_occurrence: attrs,
+        }
+      );
+
+      setSuccess("Session rescheduled.");
+      await loadSessions(attrs.taught_on || date);
+      if (attrs.taught_on) setDate(attrs.taught_on);
+    } catch (err) {
+      setError(safeMessage(err, "Failed to reschedule session"));
+    } finally {
+      setResolvingSession(false);
+    }
+  };
+
+  const selectedStatus = selectedSession ? getSessionStatus(selectedSession, allRosters) : null;
+
   return (
-    <div className="container mt-4" style={{ maxWidth: 1240 }}>
-      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+    <div className="container mt-4" style={{ maxWidth: 1320 }}>
+      <div className="d-flex flex-column flex-xl-row justify-content-between align-items-xl-center gap-3 mb-4">
         <div>
           <div className="text-uppercase text-muted" style={{ fontSize: 11, letterSpacing: 0.6 }}>
             Class Sessions
@@ -567,26 +1138,17 @@ export default function ClassSessionsDashboard() {
           <div className="text-muted">
             {loading
               ? "Loading sessions..."
-              : `${sessions.length} class session${sessions.length === 1 ? "" : "s"} on ${formatLongDate(date)}.`}
+              : `${sessions.length} session${sessions.length === 1 ? "" : "s"} on ${formatLongDate(date)}.`}
           </div>
         </div>
 
-        <div className="d-flex gap-2 align-items-center">
+        <div className="d-flex gap-2 align-items-center flex-wrap">
           <Form.Control
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             style={{ maxWidth: 200, borderRadius: 12 }}
           />
-          <Button
-            variant="outline-secondary"
-            className="rounded-pill px-3"
-            style={{ fontSize: 12 }}
-            onClick={() => loadSessions(date)}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
         </div>
       </div>
 
@@ -607,29 +1169,82 @@ export default function ClassSessionsDashboard() {
           </Card.Body>
         </Card>
       ) : (
-        <>
-          <div className="mb-4 d-flex flex-wrap gap-2">
-            {sessions.map((session) => {
-              const active = String(selectedSession?.id) === String(session.id);
-              return (
-                <Button
-                  key={session.id}
-                  variant={active ? "primary" : "outline-secondary"}
-                  className="rounded-pill px-3"
-                  style={{ fontSize: 12 }}
-                  onClick={() => setSelectedSessionId(session.id)}
-                >
-                  {sessionDisplayTitle(session)}
-                </Button>
-              );
-            })}
-          </div>
+        <Row className="g-3">
+          <Col xl={3}>
+            <Card className="border-0 shadow-sm h-100">
+              <Card.Body>
+                <div className="text-uppercase text-muted mb-3" style={{ fontSize: 11, letterSpacing: 0.6 }}>
+                  Day Planner
+                </div>
 
-          {selectedSession ? (
-            <>
-              <SessionSummaryCard session={selectedSession} />
+                <div className="d-grid" style={{ gap: 8 }}>
+                  {visibleSessions.map((session) => {
+                    const active = String(selectedSession?.id) === String(session.id);
+                    const status = getSessionStatus(session, allRosters);
 
-              <Row className="g-3">
+                    return (
+                      <Button
+                        key={session.id}
+                        variant={active ? "primary" : "outline-secondary"}
+                        className="rounded-pill px-3 text-start"
+                        style={{
+                          fontSize: 12,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                        onClick={() => setSelectedSessionId(session.id)}
+                      >
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {formatTimeRange(session.starts_at, session.ends_at) || "Time TBD"}
+                        </span>
+                        {status !== "ready" ? (
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              background:
+                                status === "needs_rescheduling" ? "#ffc107" : "#dc3545",
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : null}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col xl={9}>
+            {selectedSession ? (
+              <>
+                <SessionSummaryCard
+                  session={selectedSession}
+                  allRosters={allRosters}
+                  onJumpToResolution={() => {
+                    const el = document.getElementById("session-resolution-card");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                />
+
+                {selectedStatus !== "ready" ? (
+                  <div id="session-resolution-card">
+                    <SessionResolutionCard
+                      session={selectedSession}
+                      allRosters={allRosters}
+                      resolving={resolvingSession}
+                      onLinkRoster={linkOccurrenceToRoster}
+                      onCreateMeetingAndLink={createOneOffMeetingAndLink}
+                      onReschedule={rescheduleOccurrence}
+                    />
+                  </div>
+                ) : null}
+
+                {selectedStatus === "ready" ? (
                   <RosterAttendanceCard
                     session={selectedSession}
                     rows={selectedRows}
@@ -642,11 +1257,27 @@ export default function ClassSessionsDashboard() {
                       updateAttendanceRow(studentId, { notes })
                     }
                     onSave={saveAttendance}
+                    onMarkAllPresent={markAllPresent}
                   />
-              </Row>
-            </>
-          ) : null}
-        </>
+                ) : (
+                  <Card className="border-0 shadow-sm mb-3">
+                    <Card.Body>
+                      <div className="fw-semibold mb-2">
+                        Attendance unavailable until session is resolved
+                      </div>
+                      <div className="text-muted" style={{ fontSize: 14 }}>
+                        Link this occurrence to a roster, add a one-off roster meeting, or
+                        reschedule the occurrence so students can be loaded for attendance.
+                      </div>
+                    </Card.Body>
+                  </Card>
+                )}
+
+                <SessionPlanCard session={selectedSession} />
+              </>
+            ) : null}
+          </Col>
+        </Row>
       )}
     </div>
   );
