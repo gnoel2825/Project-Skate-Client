@@ -46,14 +46,39 @@ const weekdayShort = (n) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][Nu
 
 const formatTimeHHMM = (v) => {
   if (!v) return "";
-  if (typeof v === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(v)) {
-    const [hh, mm] = v.split(":").map(Number);
-    const dt = new Date(2000, 0, 1, hh, mm || 0, 0);
-    return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  // If it's already just a time string like "09:00" or "09:00:00"
+  if (typeof v === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(v.trim())) {
+    const [hh, mm] = v.trim().split(":").map(Number);
+    const hour = hh % 12 || 12;
+    const suffix = hh >= 12 ? "PM" : "AM";
+    return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
   }
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  // If it's any datetime-ish string, extract the literal clock time directly
+  // Examples:
+  // "2000-01-01T09:00:00.000Z"
+  // "2000-01-01 09:00:00 UTC"
+  // "Sat, 01 Jan 2000 09:00:00 UTC"
+  if (typeof v === "string") {
+    const match = v.match(/(?:T|\s)(\d{2}):(\d{2})(?::\d{2})?/);
+    if (match) {
+      const hh = Number(match[1]);
+      const mm = Number(match[2]);
+      const hour = hh % 12 || 12;
+      const suffix = hh >= 12 ? "PM" : "AM";
+      return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
+    }
+
+    return v;
+  }
+
+  // Last resort only for actual Date objects or weird non-string values
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return v.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  return "";
 };
 
 const formatRange = (start, end) => {
