@@ -8,8 +8,9 @@ import Col from "react-bootstrap/Col";
 import Button from "react-bootstrap/Button";
 import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
-import { CIcon } from '@coreui/icons-react';
-import { cilNotes } from '@coreui/icons';
+import Dropdown from "react-bootstrap/Dropdown";
+import { CIcon } from "@coreui/icons-react";
+import { cilNotes } from "@coreui/icons";
 
 import NowCard from "./NowCard";
 import MyStudentsCard from "./MyStudentsCard";
@@ -28,14 +29,12 @@ const isHHMM = (v) => typeof v === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(v);
 
 function formatHeaderDate(dateObj) {
   if (!dateObj) return "";
-  // "Jan 17 2026"
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
   }).format(dateObj);
 }
-
 
 const formatTime = (value) => {
   if (!value) return "";
@@ -64,7 +63,6 @@ function timeLabelShort(start, end) {
 
   return { top: s, bottom: `–${e}` };
 }
-
 
 function compactTime(value) {
   if (!value) return "";
@@ -99,7 +97,6 @@ function compactRange(start, end) {
   return `${s}-${e}`;
 }
 
-// safe “array extraction” helper
 function coerceArray(resData) {
   if (Array.isArray(resData)) return resData;
   if (Array.isArray(resData?.rosters)) return resData.rosters;
@@ -108,7 +105,6 @@ function coerceArray(resData) {
   return [];
 }
 
-// same SectionKicker style you already love
 const SectionKicker = ({ children, className = "", style = {} }) => (
   <div
     className={`text-uppercase text-muted ${className}`}
@@ -127,22 +123,24 @@ const formatTimeRange = (start, end) => {
   return `${s} – ${e}`;
 };
 
-const everyWeekdayLabel = (weekdayNum) => {
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const name = names[Number(weekdayNum)];
-  if (!name) return "every week";
-  return `${name} •`;
-};
+function normalizeOccurrenceRosterId(occ) {
+  return (
+    occ?.roster?.id ??
+    occ?.roster_id ??
+    occ?.lesson_plan?.roster?.id ??
+    occ?.lesson_plan?.roster_id ??
+    null
+  );
+}
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL;
-
 
 /* =======================
    Query wrapper
 ======================= */
 function CalendarPageWithQuery(props) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const dateParam = searchParams.get("date"); // "YYYY-MM-DD" or null
+  const dateParam = searchParams.get("date");
 
   const setDateParam = (yyyyMmDd) => {
     setSearchParams(
@@ -190,7 +188,7 @@ class CalendarPage extends Component {
     rightMaxHeight: null,
     showAllSchedule: false,
 
-    weeklyOverview: {}, // { [weekdayNumber]: [{ roster, schedule }] }
+    weeklyOverview: {},
     weeklyOverviewLoading: false,
     weeklyOverviewError: null,
   };
@@ -232,7 +230,6 @@ class CalendarPage extends Component {
       prevState.showAllOneOff !== this.state.showAllOneOff ||
       prevState.showAllLessonPlans !== this.state.showAllLessonPlans ||
       prevState.showAllSchedule !== this.state.showAllSchedule
-
     ) {
       this.syncRightHeight();
     }
@@ -260,66 +257,62 @@ class CalendarPage extends Component {
   };
 
   loadWeeklyOverview = async () => {
-  this.setState({ weeklyOverviewLoading: true, weeklyOverviewError: null });
+    this.setState({ weeklyOverviewLoading: true, weeklyOverviewError: null });
 
-  try {
-    // 1) get rosters list
-    let rostersRes = null;
     try {
-      rostersRes = await api.get(`/rosters`, );
-    } catch (e1) {
-      rostersRes = await api.get(`/rosters/all`, );
-    }
+      let rostersRes = null;
+      try {
+        rostersRes = await api.get(`/rosters`);
+      } catch (e1) {
+        rostersRes = await api.get(`/rosters/all`);
+      }
 
-    const rosters = coerceArray(rostersRes.data);
+      const rosters = coerceArray(rostersRes.data);
 
-    // 2) fetch weekly schedules for each roster
-    const scheduleRequests = (rosters || [])
-      .filter((r) => r?.id != null)
-      .map((r) =>
-        api
-          .get(`/rosters/${r.id}/roster_schedules`, )
-          .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
-          .catch(() => ({ roster: r, schedules: [] }))
-      );
+      const scheduleRequests = (rosters || [])
+        .filter((r) => r?.id != null)
+        .map((r) =>
+          api
+            .get(`/rosters/${r.id}/roster_schedules`)
+            .then((res) => ({ roster: r, schedules: coerceArray(res.data) }))
+            .catch(() => ({ roster: r, schedules: [] }))
+        );
 
-    const results = await Promise.all(scheduleRequests);
+      const results = await Promise.all(scheduleRequests);
 
-    // 3) group by weekday
-    const grouped = {};
-    results.forEach(({ roster, schedules }) => {
-      (schedules || []).forEach((sch) => {
-        const wd = Number(sch.weekday);
-        if (Number.isNaN(wd)) return;
-        grouped[wd] = grouped[wd] || [];
-        grouped[wd].push({ roster, schedule: sch });
-      });
-    });
-
-    // 4) sort inside day
-    Object.keys(grouped).forEach((k) => {
-      grouped[k] = grouped[k]
-        .slice()
-        .sort((a, b) => {
-          const at = String(a.schedule?.starts_at || "");
-          const bt = String(b.schedule?.starts_at || "");
-          if (at !== bt) return at.localeCompare(bt);
-          const an = String(a.roster?.name || "").toLowerCase();
-          const bn = String(b.roster?.name || "").toLowerCase();
-          return an.localeCompare(bn);
+      const grouped = {};
+      results.forEach(({ roster, schedules }) => {
+        (schedules || []).forEach((sch) => {
+          const wd = Number(sch.weekday);
+          if (Number.isNaN(wd)) return;
+          grouped[wd] = grouped[wd] || [];
+          grouped[wd].push({ roster, schedule: sch });
         });
-    });
+      });
 
-    this.setState({ weeklyOverview: grouped, weeklyOverviewLoading: false });
-  } catch (err) {
-    const msg =
-      err.response?.data?.errors?.join(", ") ||
-      err.response?.data?.error ||
-      err.message ||
-      "Failed to load weekly overview";
-    this.setState({ weeklyOverviewError: msg, weeklyOverviewLoading: false });
-  }
-};
+      Object.keys(grouped).forEach((k) => {
+        grouped[k] = grouped[k]
+          .slice()
+          .sort((a, b) => {
+            const at = String(a.schedule?.starts_at || "");
+            const bt = String(b.schedule?.starts_at || "");
+            if (at !== bt) return at.localeCompare(bt);
+            const an = String(a.roster?.name || "").toLowerCase();
+            const bn = String(b.roster?.name || "").toLowerCase();
+            return an.localeCompare(bn);
+          });
+      });
+
+      this.setState({ weeklyOverview: grouped, weeklyOverviewLoading: false });
+    } catch (err) {
+      const msg =
+        err.response?.data?.errors?.join(", ") ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to load weekly overview";
+      this.setState({ weeklyOverviewError: msg, weeklyOverviewLoading: false });
+    }
+  };
 
   fetchForDate = (dateObj) => {
     const dateStr = ymd(dateObj);
@@ -408,158 +401,140 @@ class CalendarPage extends Component {
     return cells;
   }
 
-  renderWeeklyScheduleCard() {
-  const { weeklyOverview, weeklyOverviewLoading, weeklyOverviewError } = this.state;
-
-  return (
-    <Card className="mb-3" style={{ borderRadius: 14 }}>
-      <Card.Body>
-        <div className="d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <Card.Title className="mb-0">
-              <SectionKicker>My Weekly Schedule</SectionKicker>
-            </Card.Title>
-            
-          </div>
-          <Badge bg="light" text="dark">
-            {Object.values(weeklyOverview || {}).reduce((sum, arr) => sum + (arr?.length || 0), 0)}
-          </Badge>
-        </div>
-
-        {weeklyOverviewError ? (
-          <Alert variant="danger" className="mt-3 mb-0">
-            {weeklyOverviewError}
-          </Alert>
-        ) : null}
-
-        {weeklyOverviewLoading ? (
-          <div className="text-muted mt-3" style={{ fontSize: 13 }}>
-            Loading weekly schedule…
-          </div>
-        ) : (
-          <div className="mt-3">
-            {(() => {
-  const renderDayCol = (wd) => {
-    const rows = (this.state.weeklyOverview || {})[wd] || [];
-
-    return (
-      <Col key={wd} xs={12} sm={6} md={3} lg>
-        <div className="border rounded-3 p-2 h-100" style={{ background: "#fff" }}>
-          <div className="d-flex justify-content-between align-items-center">
-            <div className="text-uppercase text-muted" style={{ fontSize: 10, letterSpacing: 0.6 }}>
-              {dayShort[wd]}
-            </div>
-            <span className="text-muted" style={{ fontSize: 12 }}>
-              {rows.length ? rows.length : ""}
-            </span>
-          </div>
-
-          {rows.length === 0 ? (
-            <div className="text-muted mt-2" style={{ fontSize: 12 }}>
-              —
-            </div>
-          ) : (
-            <div className="mt-2 d-flex flex-column" style={{ gap: 6 }}>
-              {rows.slice(0, 6).map(({ roster, schedule }) => {
-                const t = compactRange(schedule?.starts_at, schedule?.ends_at);
-
-                return (
-                  <Link
-                    key={`${roster?.id}-${schedule?.id}`}
-                    to={roster?.id != null ? `/rosters/${roster.id}` : "#"}
-                    onClick={(e) => {
-                      if (roster?.id == null) e.preventDefault();
-                    }}
-                    className="text-decoration-none"
-                    style={{ color: "inherit" }}
-                  >
-                    <div
-                      className="rounded-3 px-2 py-1"
-                      style={{ cursor: roster?.id != null ? "pointer" : "default" }}
-                      onMouseEnter={(e) => {
-                        if (roster?.id != null) e.currentTarget.style.background = "#f8f9fa";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <div
-                        className="fw-semibold"
-                        style={{
-                          fontSize: 12,
-                          lineHeight: 1.15,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                        title={roster?.name || ""}
-                      >
-                        {roster?.name || "Roster"}
-                      </div>
-
-                      <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.15 }}>
-                        {t || "time"}
-                        {schedule?.location ? ` • ${schedule.location}` : ""}
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-
-              {rows.length > 6 ? (
-                <div className="text-muted" style={{ fontSize: 11 }}>
-                  +{rows.length - 6} more
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </Col>
-    );
+  findRosterById = (rosterId) => {
+    if (rosterId == null) return null;
+    return (this.state.rosters || []).find((r) => String(r.id) === String(rosterId)) || null;
   };
 
-  return (
-    <>
-      {/* ✅ Desktop (lg+): 5 days on first row, Fri+Sat on second row */}
-      <div className="d-none d-lg-block">
-        <Row className="g-2">{[0, 1, 2, 3, 4].map(renderDayCol)}</Row>
-        <Row className="g-2 mt-2">{[5, 6].map(renderDayCol)}</Row>
-      </div>
+  renderWeeklyScheduleCard() {
+    const { weeklyOverview, weeklyOverviewLoading, weeklyOverviewError } = this.state;
 
-      {/* ✅ Mobile/tablet: keep your current responsive behavior */}
-      <div className="d-lg-none">
-        <Row className="g-2">{Array.from({ length: 7 }).map((_, wd) => renderDayCol(wd))}</Row>
-      </div>
-    </>
-  );
-})()}
-
+    return (
+      <Card className="mb-3" style={{ borderRadius: 14 }}>
+        <Card.Body>
+          <div className="d-flex justify-content-between align-items-start gap-2">
+            <div>
+              <Card.Title className="mb-0">
+                <SectionKicker>My Weekly Schedule</SectionKicker>
+              </Card.Title>
+            </div>
+            <Badge bg="light" text="dark">
+              {Object.values(weeklyOverview || {}).reduce((sum, arr) => sum + (arr?.length || 0), 0)}
+            </Badge>
           </div>
-        )}
-      </Card.Body>
-    </Card>
-  );
-}
 
-  buildCreateLessonPlanLink = (cls) => {
-  const params = new URLSearchParams();
+          {weeklyOverviewError ? (
+            <Alert variant="danger" className="mt-3 mb-0">
+              {weeklyOverviewError}
+            </Alert>
+          ) : null}
 
-  // always include selected date
-  params.set("date", ymd(this.state.selectedDate));
+          {weeklyOverviewLoading ? (
+            <div className="text-muted mt-3" style={{ fontSize: 13 }}>
+              Loading weekly schedule…
+            </div>
+          ) : (
+            <div className="mt-3">
+              {(() => {
+                const renderDayCol = (wd) => {
+                  const rows = (this.state.weeklyOverview || {})[wd] || [];
 
-  // include roster id when possible
-  if (cls?.rosterId) params.set("roster_id", String(cls.rosterId));
+                  return (
+                    <Col key={wd} xs={12} sm={6} md={3} lg>
+                      <div className="border rounded-3 p-2 h-100" style={{ background: "#fff" }}>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div className="text-uppercase text-muted" style={{ fontSize: 10, letterSpacing: 0.6 }}>
+                            {dayShort[wd]}
+                          </div>
+                          <span className="text-muted" style={{ fontSize: 12 }}>
+                            {rows.length ? rows.length : ""}
+                          </span>
+                        </div>
 
-  // optional context (safe even if your /new page ignores these)
-  if (cls?.meetingId) params.set("meeting_id", String(cls.meetingId));
-  if (cls?.starts_at) params.set("starts_at", String(cls.starts_at));
-  if (cls?.ends_at) params.set("ends_at", String(cls.ends_at));
-  if (cls?.location) params.set("location", String(cls.location));
+                        {rows.length === 0 ? (
+                          <div className="text-muted mt-2" style={{ fontSize: 12 }}>
+                            —
+                          </div>
+                        ) : (
+                          <div className="mt-2 d-flex flex-column" style={{ gap: 6 }}>
+                            {rows.slice(0, 6).map(({ roster, schedule }) => {
+                              const t = compactRange(schedule?.starts_at, schedule?.ends_at);
 
-  return `/lesson-plans/new?${params.toString()}`;
-};
+                              return (
+                                <Link
+                                  key={`${roster?.id}-${schedule?.id}`}
+                                  to={roster?.id != null ? `/rosters/${roster.id}` : "#"}
+                                  onClick={(e) => {
+                                    if (roster?.id == null) e.preventDefault();
+                                  }}
+                                  className="text-decoration-none"
+                                  style={{ color: "inherit" }}
+                                >
+                                  <div
+                                    className="rounded-3 px-2 py-1"
+                                    style={{ cursor: roster?.id != null ? "pointer" : "default" }}
+                                    onMouseEnter={(e) => {
+                                      if (roster?.id != null) e.currentTarget.style.background = "#f8f9fa";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = "transparent";
+                                    }}
+                                  >
+                                    <div
+                                      className="fw-semibold"
+                                      style={{
+                                        fontSize: 12,
+                                        lineHeight: 1.15,
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                      }}
+                                      title={roster?.name || ""}
+                                    >
+                                      {roster?.name || "Roster"}
+                                    </div>
 
-  /* ✅ calendar: smaller + cute/sleek */
+                                    <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.15 }}>
+                                      {t || "time"}
+                                      {schedule?.location ? ` • ${schedule.location}` : ""}
+                                    </div>
+                                  </div>
+                                </Link>
+                              );
+                            })}
+
+                            {rows.length > 6 ? (
+                              <div className="text-muted" style={{ fontSize: 11 }}>
+                                +{rows.length - 6} more
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    </Col>
+                  );
+                };
+
+                return (
+                  <>
+                    <div className="d-none d-lg-block">
+                      <Row className="g-2">{[0, 1, 2, 3, 4].map(renderDayCol)}</Row>
+                      <Row className="g-2 mt-2">{[5, 6].map(renderDayCol)}</Row>
+                    </div>
+
+                    <div className="d-lg-none">
+                      <Row className="g-2">{Array.from({ length: 7 }).map((_, wd) => renderDayCol(wd))}</Row>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </Card.Body>
+      </Card>
+    );
+  }
+
   renderCalendarMini() {
     const { monthAnchor, selectedDate } = this.state;
 
@@ -650,83 +625,274 @@ class CalendarPage extends Component {
     );
   }
 
-  renderLessonPlansCard(selectedLabel) {
-    const { occurrences, loading, error } = this.state;
+  renderDayAgendaCard() {
+    const { selectedDate, occurrences, loading, error } = this.state;
 
-    const lessonLimit = 5;
-    const lessonAll = occurrences || [];
-    const lessonVisible = this.state.showAllLessonPlans ? lessonAll : lessonAll.slice(0, lessonLimit);
-    const lessonHiddenCount = Math.max(0, lessonAll.length - lessonVisible.length);
+    const sessionKeyForOccurrence = (occ) => {
+      const rosterId = normalizeOccurrenceRosterId(occ) ?? "no-roster";
+      const date = occ?.taught_on || ymd(selectedDate);
+      const start = occ?.starts_at || "";
+      const end = occ?.ends_at || "";
+      const location = occ?.location || "";
+      return `${rosterId}|${date}|${start}|${end}|${location}`;
+    };
+
+    const sessionsMap = new Map();
+
+    (occurrences || []).forEach((occ) => {
+      const key = sessionKeyForOccurrence(occ);
+      const rosterId = normalizeOccurrenceRosterId(occ);
+
+      if (!sessionsMap.has(key)) {
+        sessionsMap.set(key, {
+          key,
+          rosterId,
+          roster: occ?.roster || occ?.lesson_plan?.roster || null,
+          taught_on: occ?.taught_on || ymd(selectedDate),
+          starts_at: occ?.starts_at || null,
+          ends_at: occ?.ends_at || null,
+          location: occ?.location || null,
+          lessonPlans: [],
+        });
+      }
+
+      sessionsMap.get(key).lessonPlans.push(occ);
+    });
+
+    const sessionsAll = Array.from(sessionsMap.values()).sort((a, b) => {
+      const aStart = String(a.starts_at || "");
+      const bStart = String(b.starts_at || "");
+      if (aStart !== bStart) return aStart.localeCompare(bStart);
+
+      const aRoster = String(a.roster?.name || "");
+      const bRoster = String(b.roster?.name || "");
+      return aRoster.localeCompare(bRoster);
+    });
+
+    const totalSessions = sessionsAll.length;
+    const sessionLimit = 6;
+    const visibleSessions = this.state.showAllSchedule
+      ? sessionsAll
+      : sessionsAll.slice(0, sessionLimit);
+    const hiddenSessionCount = Math.max(0, sessionsAll.length - visibleSessions.length);
 
     return (
       <Card className="mt-3">
         <Card.Body>
-          <Card.Title className="d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-left gap-2">
-              <Button
-                as={Link}
-                to={`/lesson-plans/new?date=${ymd(this.state.selectedDate)}`}
-                variant="primary"
+          <Card.Title className="d-flex justify-content-between align-items-center mb-0">
+            <SectionKicker>{formatHeaderDate(selectedDate)}</SectionKicker>
+
+            <div className="d-flex align-items-center gap-2">
+              <Badge
+                bg="light"
+                text="dark"
+                pill
+                className="px-2 py-1"
+                style={{ fontSize: 11, fontWeight: 700, lineHeight: 1 }}
               >
-                + New
-              </Button>
+                {totalSessions}
+              </Badge>
             </div>
           </Card.Title>
 
           {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
-          {loading && <p className="mt-3">Loading…</p>}
+          {loading && <p className="mt-3 text-muted">Loading…</p>}
 
-          {!loading && !error && occurrences.length === 0 ? (
-            <div className="text-muted mt-3">No lesson plans scheduled for this date.</div>
+          {!loading && !error && sessionsAll.length === 0 ? (
+            <div className="text-muted mt-3">No classes scheduled for this date.</div>
           ) : null}
 
-          {!loading && !error && occurrences.length > 0 ? (
-            <div className="d-grid mt-3" style={{ gap: 10 }}>
-              {lessonVisible.map((occ) => (
-                <div key={occ.id} className="d-flex justify-content-between">
-                  <div>
-                    <div style={{ fontWeight: 600 }}>
-                      {occ.lesson_plan?.title || "Lesson plan"}
+          {!loading && !error && sessionsAll.length > 0 ? (
+            <div className="d-grid mt-3" style={{ gap: 12 }}>
+              {visibleSessions.map((session, idx) => {
+                const fallbackRoster = session.roster || this.findRosterById(session.rosterId);
+                const rosterName = fallbackRoster?.name || "Unassigned roster";
+                const mobileTime = formatTimeRange(session.starts_at, session.ends_at) || "Time TBD";
+                const tl = timeLabelShort(session.starts_at, session.ends_at);
+
+                return (
+                  <div
+                    key={session.key || idx}
+                    className="d-flex flex-column"
+                    style={{ gap: 8 }}
+                  >
+                    <div className="d-md-none">
+                      <div className="d-flex align-items-center" style={{ gap: 10 }}>
+                        <div
+                          className="text-muted"
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            letterSpacing: 0.2,
+                            minWidth: 64,
+                            textAlign: "left",
+                          }}
+                        >
+                          {mobileTime}
+                        </div>
+
+                        <div
+                          aria-hidden="true"
+                          style={{
+                            height: 1,
+                            flex: 1,
+                            background: "#e9ecef",
+                          }}
+                        />
+                      </div>
                     </div>
 
-                    <div className="text-muted" style={{ fontSize: 13 }}>
-                      {occ.starts_at || occ.ends_at
-                        ? formatTimeRange(occ.starts_at, occ.ends_at)
-                        : "No time set"}
-                      {occ.location ? ` • ${occ.location}` : ""}
+                    <div className="d-flex align-items-stretch" style={{ gap: 12 }}>
+                      <div
+                        className="d-none d-md-flex flex-column align-items-end position-relative"
+                        style={{
+                          width: 74,
+                          flex: "0 0 74px",
+                          paddingRight: 10,
+                        }}
+                      >
+                        <div
+                          aria-hidden="true"
+                          style={{
+                            position: "absolute",
+                            top: 6,
+                            bottom: 6,
+                            right: 4,
+                            width: 1,
+                            background: "#e9ecef",
+                          }}
+                        />
+                        <div
+                          aria-hidden="true"
+                          style={{
+                            position: "absolute",
+                            top: 14,
+                            right: 0,
+                            width: 9,
+                            height: 9,
+                            borderRadius: 999,
+                            background: "#ced4da",
+                          }}
+                        />
+
+                        <div style={{ fontWeight: 800, fontSize: 12, lineHeight: 1.05 }}>
+                          {tl.top}
+                        </div>
+                        {tl.bottom ? (
+                          <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.05, marginTop: 2 }}>
+                            {tl.bottom}
+                          </div>
+                        ) : (
+                          <div style={{ height: 13 }} />
+                        )}
+                      </div>
+
+                      <div
+                        className="border rounded-3 flex-grow-1"
+                        style={{
+                          padding: 14,
+                          background: "rgba(255,255,255,0.92)",
+                          boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+                        }}
+                      >
+                        <div className="d-flex justify-content-between align-items-start gap-3">
+                          <div style={{ minWidth: 0 }}>
+                            {session.rosterId ? (
+                              <Link
+                                to={`/rosters/${session.rosterId}`}
+                                className="text-decoration-none"
+                                style={{ color: "inherit" }}
+                              >
+                                <div
+                                  style={{
+                                    fontWeight: 700,
+                                    wordBreak: "break-word",
+                                    lineHeight: 1.15,
+                                    cursor: "pointer",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                                >
+                                  {rosterName}
+                                </div>
+                              </Link>
+                            ) : (
+                              <div style={{ fontWeight: 700, wordBreak: "break-word", lineHeight: 1.15 }}>
+                                {rosterName}
+                              </div>
+                            )}
+
+                            <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                              {session.location ? (
+                                <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
+                                  {session.location}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 12,
+                            paddingTop: 12,
+                            borderTop: "1px solid rgba(0,0,0,0.06)",
+                          }}
+                        >
+                          <div className="text-muted" style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                            Lesson Plan(s)
+                          </div>
+
+                          <div className="d-flex flex-wrap gap-2">
+                            {session.lessonPlans.map((occ) => (
+                              <Link
+                                key={`lp-${occ.id}`}
+                                to={`/lesson-plans/${occ.lesson_plan?.id}`}
+                                className="btn btn-outline-primary btn-sm"
+                                style={{
+                                  padding: "6px 10px",
+                                  fontSize: 12,
+                                  borderRadius: 999,
+                                  maxWidth: "100%",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={occ.lesson_plan?.title || "Lesson plan"}
+                              >
+                                {occ.lesson_plan?.title || "Lesson plan"}
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="mt-2">
-                    <Link to={`/lesson-plans/${occ.lesson_plan?.id}`} className="btn btn-outline-primary">
-                      View
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
 
-          {lessonHiddenCount > 0 && (
-            <div className="d-flex justify-content-center mt-2">
+          {hiddenSessionCount > 0 && (
+            <div className="d-flex justify-content-center mt-3">
               <Button
                 size="sm"
                 variant="outline-secondary"
-                onClick={() => this.setState({ showAllLessonPlans: true })}
+                onClick={() => this.setState({ showAllSchedule: true })}
               >
-                Show {lessonHiddenCount} more
+                Show {hiddenSessionCount} more sessions
               </Button>
             </div>
           )}
 
-          {this.state.showAllLessonPlans && lessonAll.length > lessonLimit && (
+          {this.state.showAllSchedule && sessionsAll.length > sessionLimit && (
             <div className="d-flex justify-content-center mt-2">
               <Button
                 size="sm"
                 variant="outline-secondary"
-                onClick={() => this.setState({ showAllLessonPlans: false })}
+                onClick={() => this.setState({ showAllSchedule: false })}
               >
-                Show less
+                Show fewer sessions
               </Button>
             </div>
           )}
@@ -735,487 +901,127 @@ class CalendarPage extends Component {
     );
   }
 
+  renderHeaderNewMenu(selectedDate) {
+    return (
+     <Dropdown align="end">
+  <Dropdown.Toggle
+    variant="primary"
+    id="dashboard-new-dropdown"
+    className="border-0 shadow-sm"
+    style={{
+      borderRadius: 999,
+      padding: "5px 12px",
+      fontSize: 12,
+      fontWeight: 400,
+      lineHeight: 1.2,
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+    }}
+  >
+    <span
+      aria-hidden="true"
+      style={{
+        fontSize: 13,
+        lineHeight: 1,
+        opacity: 0.9,
+      }}
+    >
+      ＋
+    </span>
+    <span>New</span>
+  </Dropdown.Toggle>
+
+  <Dropdown.Menu
+    style={{
+      borderRadius: 14,
+      padding: 8,
+      minWidth: 220,
+      border: "1px solid #e9ecef",
+      boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
+    }}
+  >
+    <Dropdown.Item
+      as={Link}
+      to="/students/new"
+      className="rounded-3"
+      style={{
+        padding: "9px 10px",
+        fontSize: 11,
+        letterSpacing: 0.6,
+        textTransform: "uppercase",
+        color: "#6c757d",
+      }}
+    >
+      New Student
+    </Dropdown.Item>
+
+    <Dropdown.Item
+      as={Link}
+      to="/rosters/new"
+      className="rounded-3"
+      style={{
+        padding: "9px 10px",
+        fontSize: 11,
+        letterSpacing: 0.6,
+        textTransform: "uppercase",
+        color: "#6c757d",
+      }}
+    >
+      New Roster
+    </Dropdown.Item>
+
+    <Dropdown.Item
+      as={Link}
+      to={`/lesson-plans/new?date=${ymd(selectedDate)}`}
+      className="rounded-3"
+      style={{
+        padding: "9px 10px",
+        fontSize: 11,
+        letterSpacing: 0.6,
+        textTransform: "uppercase",
+        color: "#6c757d",
+      }}
+    >
+      New Lesson Plan
+    </Dropdown.Item>
+  </Dropdown.Menu>
+</Dropdown>
+    );
+  }
+
   render() {
     const { selectedDate } = this.state;
-    const selectedLabel = selectedDate.toLocaleDateString();
-
-    const weeklyLimit = 2;
-    const oneOffLimit = 2;
-
-    const weeklyAll = this.state.rosters || [];
-    const oneOffAll = this.state.oneOffMeetings || [];
-
-    const weeklyVisible = this.state.showAllWeekly ? weeklyAll : weeklyAll.slice(0, weeklyLimit);
-    const oneOffVisible = this.state.showAllOneOff ? oneOffAll : oneOffAll.slice(0, oneOffLimit);
-
-    const weeklyHiddenCount = Math.max(0, weeklyAll.length - weeklyVisible.length);
-    const oneOffHiddenCount = Math.max(0, oneOffAll.length - oneOffVisible.length);
 
     return (
       <div className="container mt-4" style={{ maxWidth: 1100 }}>
-        <div className="d-flex justify-content-between align-items-end mb-3 flex-wrap gap-2">
-  <div>
-    <h1 className="mb-1">Dashboard</h1>
-    <div className="text-muted" style={{ fontSize: 14 }}>
-      Welcome back{this.props.currentUser?.first_name ? `, ${this.props.currentUser.first_name}` : ""}.
-    </div>
-  </div>
-</div>
+        <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+          <div>
+            <h1 className="mb-1">Dashboard</h1>
+            <div className="text-muted" style={{ fontSize: 14 }}>
+              Welcome back{this.props.currentUser?.first_name ? `, ${this.props.currentUser.first_name}` : ""}.
+            </div>
+          </div>
 
+          <div className="d-flex align-items-center">
+            {this.renderHeaderNewMenu(selectedDate)}
+          </div>
+        </div>
 
         <Row>
-          {/* ✅ SWAP: LEFT column now has calendar + schedules + lesson plans */}
           <Col md={5} className="mb-3">
             {this.renderCalendarMini()}
 
-            {/* keep your height-sync wrapper on LEFT (since calendar is now left) */}
             <div
               style={{
                 maxHeight: this.state.rightMaxHeight ?? "none",
                 paddingRight: this.state.rightMaxHeight ? 6 : 0,
               }}
             >
-             {/* ✅ Combined Day Agenda: classes (weekly + one-off) + nested lesson plans */}
-<Card className="mt-3">
-  <Card.Body>
-    {(() => {
-      const todayDow = selectedDate.getDay();
-
-      // ---------- helpers ----------
-      const timeKey = (v) => {
-        if (!v) return null;
-
-        // "HH:MM" / "HH:MM:SS"
-        if (isHHMM(v)) {
-          const [hh, mm] = v.split(":").map(Number);
-          if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
-          return hh * 60 + mm;
-        }
-
-        // ISO datetime
-        const d = new Date(v);
-        if (Number.isNaN(d.getTime())) return null;
-        return d.getHours() * 60 + d.getMinutes();
-      };
-
-      const normalizeRosterId = (obj) =>
-  obj?.roster?.id ??
-  obj?.roster_id ??
-  obj?.rosterId ??
-  obj?.lesson_plan?.roster?.id ??
-  obj?.lesson_plan?.roster_id ??
-  null;
-
-      // overlap: (start < end2) && (end > start2)
-      const overlaps = (aStart, aEnd, bStart, bEnd) => {
-        if (aStart == null || bStart == null) return false;
-
-        const aE = aEnd == null ? aStart + 1 : aEnd; // if no end, treat as tiny block
-        const bE = bEnd == null ? bStart + 1 : bEnd;
-
-        return aStart < bE && aE > bStart;
-      };
-
-      // ---------- build class instances ----------
-      const weeklyInstances = (this.state.rosters || []).flatMap((r) => {
-        const todaysSchedules = Array.isArray(r.roster_schedules)
-          ? r.roster_schedules.filter((s) => Number(s.weekday) === todayDow)
-          : [];
-
-        return todaysSchedules.map((s) => ({
-          type: "weekly",
-          roster: r,
-          rosterId: r?.id ?? null,
-          starts_at: s.starts_at,
-          ends_at: s.ends_at,
-          location: s.location,
-          schedule: s,
-        }));
-      });
-
-      
-
-      const oneOffInstances = (this.state.oneOffMeetings || []).map((m) => ({
-        type: "one-off",
-        meeting: m,
-        roster: m.roster,
-        rosterId: normalizeRosterId(m),
-        starts_at: m.starts_at,
-        ends_at: m.ends_at,
-        location: m.location,
-        notes: m.notes,
-      }));
-
-      const classesAll = [...weeklyInstances, ...oneOffInstances].sort((a, b) => {
-        const ta = timeKey(a.starts_at) ?? 99999;
-        const tb = timeKey(b.starts_at) ?? 99999;
-        if (ta !== tb) return ta - tb;
-        if (a.type !== b.type) return a.type === "weekly" ? -1 : 1;
-        return (a.roster?.name || "").localeCompare(b.roster?.name || "");
-      });
-
-      // ---------- match lesson plans to classes ----------
-      const occAll = (this.state.occurrences || []).slice();
-
-      // Each occurrence should have: lesson_plan.id/title + starts_at/ends_at + roster_id (preferred)
-      const occWithKeys = occAll.map((occ) => {
-        const rosterId = normalizeRosterId(occ);
-        const s = timeKey(occ.starts_at);
-        const e = timeKey(occ.ends_at);
-        return { occ, rosterId, s, e };
-      });
-
-      // We'll assign each lesson plan occurrence to at most ONE class (first best match)
-      const usedOccIds = new Set();
-
-      const matchForClass = (cls) => {
-        const clsRosterId = cls.rosterId ? String(cls.rosterId) : null;
-        const clsS = timeKey(cls.starts_at);
-        const clsE = timeKey(cls.ends_at);
-
-        const matches = occWithKeys
-          .filter(({ occ, rosterId, s, e }) => {
-            if (!occ?.id) return false;
-            if (usedOccIds.has(occ.id)) return false;
-
-            // require roster match if occurrence has rosterId AND class has rosterId
-            const occRosterId = rosterId ? String(rosterId) : null;
-            if (clsRosterId && occRosterId && clsRosterId !== occRosterId) return false;
-
-            // require overlap in time if both have time
-            // If occurrence has no time, it won't match a specific class; it'll go to Other Lesson Plans
-            if (s == null) return false;
-
-            return overlaps(s, e, clsS, clsE);
-          })
-          .map(({ occ }) => occ);
-
-        // mark used
-        matches.forEach((o) => usedOccIds.add(o.id));
-        return matches;
-      };
-
-      const classesEnriched = classesAll.map((cls) => ({
-        ...cls,
-        lessonPlans: matchForClass(cls),
-      }));
-
-      const otherLessonPlans = occAll.filter((occ) => occ?.id && !usedOccIds.has(occ.id));
-
-      // ---------- counts + limits ----------
-      const totalClasses = classesAll.length;
-      const totalLessonPlans = occAll.length;
-
-      const classLimit = 6;
-      const visibleClasses = this.state.showAllSchedule ? classesEnriched : classesEnriched.slice(0, classLimit);
-      const hiddenClassCount = Math.max(0, classesEnriched.length - visibleClasses.length);
-
-      const otherLimit = 5;
-      const otherVisible = this.state.showAllLessonPlans ? otherLessonPlans : otherLessonPlans.slice(0, otherLimit);
-      const otherHiddenCount = Math.max(0, otherLessonPlans.length - otherVisible.length);
-
-      // ---------- header ----------
-      return (
-        <>
-         <Card.Title className="d-flex justify-content-between align-items-center mb-0">
-  <SectionKicker>{formatHeaderDate(selectedDate)}</SectionKicker>
-
-  <Badge
-    bg="light"
-    text="dark"
-    pill
-    className="px-2 py-1"
-    style={{ fontSize: 11, fontWeight: 700, lineHeight: 1 }}
-  >
-    {totalClasses}
-  </Badge>
-</Card.Title>
-
-
-          {/* Errors/Loading */}
-          {this.state.rostersError && <Alert variant="danger" className="mt-3">{this.state.rostersError}</Alert>}
-          {this.state.oneOffError && <Alert variant="danger" className="mt-3">{this.state.oneOffError}</Alert>}
-          {this.state.error && <Alert variant="danger" className="mt-3">{this.state.error}</Alert>}
-
-          {(this.state.rostersLoading || this.state.oneOffLoading || this.state.loading) && (
-            <p className="mt-3 text-muted">Loading…</p>
-          )}
-
-          {!this.state.rostersLoading &&
-            !this.state.oneOffLoading &&
-            !this.state.loading &&
-            !this.state.rostersError &&
-            !this.state.oneOffError &&
-            !this.state.error && (
-              <>
-                {/* ---- Classes list ---- */}
-                {classesEnriched.length === 0 ? (
-                  <div className="text-muted mt-3">No classes/meetings for this day.</div>
-                ) : (
-                  <div className="d-grid mt-3" style={{ gap: 12 }}>
-                    {visibleClasses.map((cls, idx) => {
-  const rosterName = cls.roster?.name || "Roster";
-  const rosterId = cls.rosterId;
-
-  const tl = timeLabelShort(cls.starts_at, cls.ends_at);
-  const mobileTime = formatTimeRange(cls.starts_at, cls.ends_at) || "Time TBD";
-
-  return (
-  <div
-    key={`${cls.type}-${cls.starts_at || "na"}-${rosterId || idx}`}
-    className="d-flex flex-column"
-    style={{ gap: 8 }}
-  >
-    {/* ✅ MOBILE: TIME ROW ABOVE CARD (outside the card) */}
-    <div className="d-md-none">
-      <div className="d-flex align-items-center" style={{ gap: 10 }}>
-        <div
-          className="text-muted"
-          style={{
-            fontSize: 12,
-            fontWeight: 800,
-            letterSpacing: 0.2,
-            minWidth: 64,
-            textAlign: "left"
-          }}
-        >
-          {mobileTime}
-        </div>
-
-        <div
-          aria-hidden="true"
-          style={{
-            height: 1,
-            flex: 1,
-            background: "#e9ecef"
-          }}
-        />
-      </div>
-    </div>
-
-    {/* ✅ DESKTOP/TABLET ROW: time gutter + card */}
-    <div className="d-flex align-items-stretch" style={{ gap: 12 }}>
-      {/* LEFT TIME GUTTER (md+) */}
-      <div
-        className="d-none d-md-flex flex-column align-items-end position-relative"
-        style={{
-          width: 74,
-          flex: "0 0 74px",
-          paddingRight: 10
-        }}
-      >
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: 6,
-            bottom: 6,
-            right: 4,
-            width: 1,
-            background: "#e9ecef"
-          }}
-        />
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: 14,
-            right: 0,
-            width: 9,
-            height: 9,
-            borderRadius: 999,
-            background: "#ced4da"
-          }}
-        />
-
-        <div style={{ fontWeight: 800, fontSize: 12, lineHeight: 1.05 }}>
-          {tl.top}
-        </div>
-        {tl.bottom ? (
-          <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.05, marginTop: 2 }}>
-            {tl.bottom}
-          </div>
-        ) : (
-          <div style={{ height: 13 }} />
-        )}
-      </div>
-
-      {/* RIGHT CARD */}
-      <div
-        className="border rounded-3 flex-grow-1"
-        style={{
-          padding: 14,
-          background: "rgba(255,255,255,0.92)",
-          boxShadow: "0 1px 0 rgba(0,0,0,0.04)"
-        }}
-      >
-        {/* Top row: name + badges */}
-        <div className="d-flex justify-content-between align-items-start gap-3">
-          <div style={{ minWidth: 0 }}>
-            {rosterId ? (
-              <Link
-                to={`/rosters/${rosterId}`}
-                className="text-decoration-none"
-                style={{ color: "inherit" }}
-                title="View roster"
-              >
-                <div
-                  style={{
-                    fontWeight: 700,
-                    wordBreak: "break-word",
-                    lineHeight: 1.15,
-                    cursor: "pointer"
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                >
-                  {rosterName}
-                </div>
-              </Link>
-            ) : (
-              <div style={{ fontWeight: 700, wordBreak: "break-word", lineHeight: 1.15 }}>
-                {rosterName}
-              </div>
-            )}
-
-            {/* ✅ REMOVE mobileTime from inside the card */}
-
-            <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
-              {cls.type === "weekly" ? (
-                <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
-                  weekly
-                </Badge>
-              ) : (
-                <Badge bg="warning" text="dark" style={{ fontWeight: 600 }}>
-                  one-off
-                </Badge>
-              )}
+              {this.renderDayAgendaCard()}
             </div>
+          </Col>
 
-            {cls.type === "one-off" && cls.notes ? (
-              <div className="text-muted" style={{ fontSize: 12, marginTop: 6, lineHeight: 1.25 }}>
-                {cls.notes}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Divider + lesson plans ... (leave the rest exactly as you have it) */}
-        <div
-  style={{
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: "1px solid rgba(0,0,0,0.06)",
-  }}
->
-  {(!cls.lessonPlans || cls.lessonPlans.length === 0) ? (
-    <div
-      style={{
-        borderRadius: 12,
-        border: "1px dashed rgba(0,0,0,0.12)",
-        padding: 12,
-        background: "rgba(0,0,0,0.02)",
-      }}
-    >
-      <div className="text-muted" style={{ fontSize: 12 }}>
-        No lesson plans scheduled for this class.
-      </div>
-
-      <div className="mt-2">
-        <Button
-          as={Link}
-          to={this.buildCreateLessonPlanLink(cls)}
-          variant="outline-secondary"
-          size="sm"
-          style={{
-            padding: "6px 10px",
-            fontSize: 12,
-            borderRadius: 999,
-            maxWidth: "100%",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Create Lesson Plan
-        </Button>
-      </div>
-    </div>
-  ) : (
-    <>
-      <div className="text-muted" style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-        Lesson Plan(s)
-      </div>
-
-      <div className="d-flex flex-wrap gap-2">
-        {cls.lessonPlans.map((occ) => (
-          <Link
-            key={`lp-${occ.id}`}
-            to={`/lesson-plans/${occ.lesson_plan?.id}`}
-            className="btn btn-outline-primary btn-sm"
-            style={{
-              padding: "6px 10px",
-              fontSize: 12,
-              borderRadius: 999,
-              maxWidth: "100%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-            title={occ.lesson_plan?.title || "Lesson plan"}
-          >
-            {occ.lesson_plan?.title || "Lesson plan"}
-          </Link>
-        ))}
-      </div>
-    </>
-  )}
-</div>
-
-      </div>
-    </div>
-  </div>
-);
-
-})}
-
-                  </div>
-                )}
-
-                {hiddenClassCount > 0 && (
-                  <div className="d-flex justify-content-center mt-3">
-                    <Button
-                      size="sm"
-                      variant="outline-secondary"
-                      onClick={() => this.setState({ showAllSchedule: true })}
-                    >
-                      Show {hiddenClassCount} more classes
-                    </Button>
-                  </div>
-                )}
-
-                {this.state.showAllSchedule && classesEnriched.length > classLimit && (
-                  <div className="d-flex justify-content-center mt-2">
-                    <Button
-                      size="sm"
-                      variant="outline-secondary"
-                      onClick={() => this.setState({ showAllSchedule: false })}
-                    >
-                      Show fewer classes
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-        </>
-      );
-    })()}
-  </Card.Body>
-</Card>
-</div>
-</Col><br/>
-
-          {/* ✅ SWAP: RIGHT column now has Now + My Students */}
           <Col md={7} className="mb-3">
             {this.renderWeeklyScheduleCard()}
             <MyStudentsCard />
