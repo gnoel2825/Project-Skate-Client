@@ -133,6 +133,36 @@ function normalizeOccurrenceRosterId(occ) {
   );
 }
 
+function weekdayNumberFromYmd(value) {
+  if (!value) return null;
+  const [y, m, d] = String(value).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d).getDay();
+}
+
+function timeKey(value) {
+  if (!value) return null;
+
+  if (isHHMM(value)) {
+    const [hh, mm] = value.split(":").map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    return hh * 60 + mm;
+  }
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function overlaps(aStart, aEnd, bStart, bEnd) {
+  if (aStart == null || bStart == null) return false;
+
+  const aE = aEnd == null ? aStart + 1 : aEnd;
+  const bE = bEnd == null ? bStart + 1 : bEnd;
+
+  return aStart < bE && aE > bStart;
+}
+
 const API_BASE = process.env.REACT_APP_API_BASE_URL;
 
 /* =======================
@@ -380,7 +410,12 @@ class CalendarPage extends Component {
     this.fetchForDate(dateObj);
 
     this.props.setDateParam?.(ymd(dateObj));
-    this.setState({ showAllLessonPlans: false, showAllWeekly: false, showAllOneOff: false, showAllSchedule: false });
+    this.setState({
+      showAllLessonPlans: false,
+      showAllWeekly: false,
+      showAllOneOff: false,
+      showAllSchedule: false,
+    });
   };
 
   buildCalendarCells() {
@@ -404,6 +439,20 @@ class CalendarPage extends Component {
   findRosterById = (rosterId) => {
     if (rosterId == null) return null;
     return (this.state.rosters || []).find((r) => String(r.id) === String(rosterId)) || null;
+  };
+
+  buildCreateLessonPlanLink = (session) => {
+    const params = new URLSearchParams();
+    const date = session?.taught_on || ymd(this.state.selectedDate);
+
+    params.set("date", date);
+    if (session?.rosterId) params.set("roster_id", String(session.rosterId));
+    if (session?.meeting?.id) params.set("meeting_id", String(session.meeting.id));
+    if (session?.starts_at) params.set("starts_at", String(session.starts_at));
+    if (session?.ends_at) params.set("ends_at", String(session.ends_at));
+    if (session?.location) params.set("location", String(session.location));
+
+    return `/lesson-plans/new?${params.toString()}`;
   };
 
   renderWeeklyScheduleCard() {
@@ -626,33 +675,202 @@ class CalendarPage extends Component {
   }
 
   renderDayAgendaCard() {
-    const { selectedDate, occurrences, loading, error } = this.state;
+    const {
+      selectedDate,
+      occurrences,
+      oneOffMeetings,
+      rosters,
+      loading,
+      error,
+      rostersError,
+      rostersLoading,
+      oneOffError,
+      oneOffLoading,
+    } = this.state;
 
-    const sessionKeyForOccurrence = (occ) => {
-      const rosterId = normalizeOccurrenceRosterId(occ) ?? "no-roster";
-      const date = occ?.taught_on || ymd(selectedDate);
-      const start = occ?.starts_at || "";
-      const end = occ?.ends_at || "";
-      const location = occ?.location || "";
-      return `${rosterId}|${date}|${start}|${end}|${location}`;
-    };
+    const selectedDateStr = ymd(selectedDate);
+    const selectedDow = selectedDate.getDay();
+
+    const sessionKey = ({ rosterId, taught_on, starts_at, ends_at, location, source = "session" }) =>
+      `${source}|${rosterId ?? "no-roster"}|${taught_on || ""}|${starts_at || ""}|${ends_at || ""}|${location || ""}`;
 
     const sessionsMap = new Map();
 
-    (occurrences || []).forEach((occ) => {
-      const key = sessionKeyForOccurrence(occ);
-      const rosterId = normalizeOccurrenceRosterId(occ);
+    // 1) Weekly roster schedule slots for this weekday
+    (rosters || []).forEach((roster) => {
+      const schedules = Array.isArray(roster?.roster_schedules) ? roster.roster_schedules : [];
+
+      schedules
+        .filter((sch) => Number(sch?.weekday) === selectedDow)
+        .forEach((sch) => {
+          const key = sessionKey({
+            source: "weekly",
+            rosterId: roster?.id ?? null,
+            taught_on: selectedDateStr,
+            starts_at: sch?.starts_at || "",
+            ends_at: sch?.ends_at || "",
+            location: sch?.location || "",
+          });
+
+          if (!sessionsMap.has(key)) {
+            sessionsMap.set(key, {
+              key,
+              source: "weekly",
+              rosterId: roster?.id ?? null,
+              roster,
+              taught_on: selectedDateStr,
+              starts_at: sch?.starts_at || null,
+              ends_at: sch?.ends_at || null,
+              location: sch?.location || null,
+              notes: null,
+              meeting: null,
+              lessonPlans: [],
+              weeklySchedule: sch,
+            });
+          }
+        });
+    });
+
+    // 2) One-off meetings for this date
+    (oneOffMeetings || []).forEach((meeting) => {
+      const rosterId =
+        meeting?.roster?.id ??
+        meeting?.roster_id ??
+        null;
+
+      const meetingDate = meeting?.taught_on || selectedDateStr;
+      const meetingStart = timeKey(meeting?.starts_at);
+      const meetingEnd = timeKey(meeting?.ends_at);
+
+      let matchedExistingKey = null;
+
+      for (const [key, session] of sessionsMap.entries()) {
+        const sameDate = String(session.taught_on || "") === String(meetingDate || "");
+        if (!sameDate) continue;
+
+        const sessionRosterId = session.rosterId != null ? String(session.rosterId) : null;
+        const meetingRosterId = rosterId != null ? String(rosterId) : null;
+        if (sessionRosterId && meetingRosterId && sessionRosterId !== meetingRosterId) continue;
+
+        const sS = timeKey(session.starts_at);
+        const sE = timeKey(session.ends_at);
+
+        if (meetingStart != null && sS != null && overlaps(meetingStart, meetingEnd, sS, sE)) {
+          matchedExistingKey = key;
+          break;
+        }
+      }
+
+      if (matchedExistingKey) {
+        const existing = sessionsMap.get(matchedExistingKey);
+        existing.source = "meeting";
+        existing.meeting = meeting;
+        existing.notes = meeting?.notes || existing.notes || null;
+        existing.location = existing.location || meeting?.location || null;
+        if (!existing.rosterId && rosterId != null) existing.rosterId = rosterId;
+        if (!existing.roster && meeting?.roster) existing.roster = meeting.roster;
+        return;
+      }
+
+      const key = sessionKey({
+        source: "meeting",
+        rosterId,
+        taught_on: meetingDate,
+        starts_at: meeting?.starts_at || "",
+        ends_at: meeting?.ends_at || "",
+        location: meeting?.location || "",
+      });
 
       if (!sessionsMap.has(key)) {
         sessionsMap.set(key, {
           key,
+          source: "meeting",
           rosterId,
-          roster: occ?.roster || occ?.lesson_plan?.roster || null,
-          taught_on: occ?.taught_on || ymd(selectedDate),
+          roster: meeting?.roster || this.findRosterById(rosterId) || null,
+          taught_on: meetingDate,
+          starts_at: meeting?.starts_at || null,
+          ends_at: meeting?.ends_at || null,
+          location: meeting?.location || null,
+          notes: meeting?.notes || null,
+          meeting,
+          lessonPlans: [],
+          weeklySchedule: null,
+        });
+      }
+    });
+
+    // 3) Lesson plan occurrences for this date
+    (occurrences || []).forEach((occ) => {
+      const occRosterId = normalizeOccurrenceRosterId(occ);
+      const occS = timeKey(occ?.starts_at);
+      const occE = timeKey(occ?.ends_at);
+      const occDate = occ?.taught_on || selectedDateStr;
+
+      let matchedExistingKey = null;
+
+      for (const [key, session] of sessionsMap.entries()) {
+        const sameDate = String(session.taught_on || "") === String(occDate || "");
+        if (!sameDate) continue;
+
+        const sessionRosterId = session.rosterId != null ? String(session.rosterId) : null;
+        const occRosterIdStr = occRosterId != null ? String(occRosterId) : null;
+
+        if (sessionRosterId && occRosterIdStr && sessionRosterId !== occRosterIdStr) continue;
+
+        const sS = timeKey(session.starts_at);
+        const sE = timeKey(session.ends_at);
+
+        if (occS != null && sS != null && overlaps(occS, occE, sS, sE)) {
+          matchedExistingKey = key;
+          break;
+        }
+
+        if (
+          matchedExistingKey == null &&
+          occRosterIdStr &&
+          sessionRosterId &&
+          occRosterIdStr === sessionRosterId &&
+          String(session.starts_at || "") === String(occ?.starts_at || "") &&
+          String(session.ends_at || "") === String(occ?.ends_at || "")
+        ) {
+          matchedExistingKey = key;
+        }
+      }
+
+      if (matchedExistingKey) {
+        const existing = sessionsMap.get(matchedExistingKey);
+        existing.lessonPlans.push(occ);
+        if (!existing.roster && (occ?.roster || occ?.lesson_plan?.roster)) {
+          existing.roster = occ?.roster || occ?.lesson_plan?.roster;
+        }
+        if (!existing.rosterId && occRosterId != null) existing.rosterId = occRosterId;
+        if (!existing.location && occ?.location) existing.location = occ.location;
+        return;
+      }
+
+      const key = sessionKey({
+        source: "occurrence",
+        rosterId: occRosterId,
+        taught_on: occDate,
+        starts_at: occ?.starts_at || "",
+        ends_at: occ?.ends_at || "",
+        location: occ?.location || "",
+      });
+
+      if (!sessionsMap.has(key)) {
+        sessionsMap.set(key, {
+          key,
+          source: "occurrence",
+          rosterId: occRosterId,
+          roster: occ?.roster || occ?.lesson_plan?.roster || this.findRosterById(occRosterId) || null,
+          taught_on: occDate,
           starts_at: occ?.starts_at || null,
           ends_at: occ?.ends_at || null,
           location: occ?.location || null,
+          notes: null,
+          meeting: null,
           lessonPlans: [],
+          weeklySchedule: null,
         });
       }
 
@@ -660,9 +878,9 @@ class CalendarPage extends Component {
     });
 
     const sessionsAll = Array.from(sessionsMap.values()).sort((a, b) => {
-      const aStart = String(a.starts_at || "");
-      const bStart = String(b.starts_at || "");
-      if (aStart !== bStart) return aStart.localeCompare(bStart);
+      const aStart = timeKey(a.starts_at) ?? 99999;
+      const bStart = timeKey(b.starts_at) ?? 99999;
+      if (aStart !== bStart) return aStart - bStart;
 
       const aRoster = String(a.roster?.name || "");
       const bRoster = String(b.roster?.name || "");
@@ -696,19 +914,22 @@ class CalendarPage extends Component {
           </Card.Title>
 
           {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
-          {loading && <p className="mt-3 text-muted">Loading…</p>}
+          {rostersError && <Alert variant="danger" className="mt-3">{rostersError}</Alert>}
+          {oneOffError && <Alert variant="danger" className="mt-3">{oneOffError}</Alert>}
+          {(loading || rostersLoading || oneOffLoading) && <p className="mt-3 text-muted">Loading…</p>}
 
-          {!loading && !error && sessionsAll.length === 0 ? (
+          {!loading && !rostersLoading && !oneOffLoading && !error && !rostersError && !oneOffError && sessionsAll.length === 0 ? (
             <div className="text-muted mt-3">No classes scheduled for this date.</div>
           ) : null}
 
-          {!loading && !error && sessionsAll.length > 0 ? (
+          {!loading && !rostersLoading && !oneOffLoading && !error && !rostersError && !oneOffError && sessionsAll.length > 0 ? (
             <div className="d-grid mt-3" style={{ gap: 12 }}>
               {visibleSessions.map((session, idx) => {
                 const fallbackRoster = session.roster || this.findRosterById(session.rosterId);
-                const rosterName = fallbackRoster?.name || "Unassigned roster";
+                const rosterName = fallbackRoster?.name || "No Roster";
                 const mobileTime = formatTimeRange(session.starts_at, session.ends_at) || "Time TBD";
                 const tl = timeLabelShort(session.starts_at, session.ends_at);
+                const hasLessonPlans = (session.lessonPlans || []).length > 0;
 
                 return (
                   <div
@@ -823,12 +1044,30 @@ class CalendarPage extends Component {
                             )}
 
                             <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                              {session.source === "meeting" ? (
+                                <Badge bg="warning" text="dark" style={{ fontWeight: 600 }}>
+                                  one-off
+                                </Badge>
+                              ) : null}
+
+                              {session.weeklySchedule ? (
+                                <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
+                                  weekly
+                                </Badge>
+                              ) : null}
+
                               {session.location ? (
                                 <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
                                   {session.location}
                                 </Badge>
                               ) : null}
                             </div>
+
+                            {session.notes ? (
+                              <div className="text-muted mt-2" style={{ fontSize: 12, lineHeight: 1.25 }}>
+                                {session.notes}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
 
@@ -843,27 +1082,54 @@ class CalendarPage extends Component {
                             Lesson Plan(s)
                           </div>
 
-                          <div className="d-flex flex-wrap gap-2">
-                            {session.lessonPlans.map((occ) => (
-                              <Link
-                                key={`lp-${occ.id}`}
-                                to={`/lesson-plans/${occ.lesson_plan?.id}`}
-                                className="btn btn-outline-primary btn-sm"
-                                style={{
-                                  padding: "6px 10px",
-                                  fontSize: 12,
-                                  borderRadius: 999,
-                                  maxWidth: "100%",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                                title={occ.lesson_plan?.title || "Lesson plan"}
-                              >
-                                {occ.lesson_plan?.title || "Lesson plan"}
-                              </Link>
-                            ))}
-                          </div>
+                          {!hasLessonPlans ? (
+                            <div
+                              className="border rounded-3 p-3"
+                              style={{
+                                background: "#fbfbfd",
+                                borderColor: "#e9ecef",
+                              }}
+                            >
+                              <div className="text-muted" style={{ fontSize: 12 }}>
+                                No lesson plans scheduled for this class yet.
+                              </div>
+
+                              <div className="mt-2">
+                                <Button
+                                  as={Link}
+                                  to={this.buildCreateLessonPlanLink(session)}
+                                  size="sm"
+                                  variant="outline-primary"
+                                  className="rounded-pill px-3"
+                                  style={{ fontSize: 12 }}
+                                >
+                                  Schedule Lesson Plan
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="d-flex flex-wrap gap-2">
+                              {session.lessonPlans.map((occ) => (
+                                <Link
+                                  key={`lp-${occ.id}`}
+                                  to={`/lesson-plans/${occ.lesson_plan?.id}`}
+                                  className="btn btn-outline-primary btn-sm"
+                                  style={{
+                                    padding: "6px 10px",
+                                    fontSize: 12,
+                                    borderRadius: 999,
+                                    maxWidth: "100%",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  title={occ.lesson_plan?.title || "Lesson plan"}
+                                >
+                                  {occ.lesson_plan?.title || "Lesson plan"}
+                                </Link>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -903,90 +1169,90 @@ class CalendarPage extends Component {
 
   renderHeaderNewMenu(selectedDate) {
     return (
-     <Dropdown align="end">
-  <Dropdown.Toggle
-    variant="primary"
-    id="dashboard-new-dropdown"
-    className="border-0 shadow-sm"
-    style={{
-      borderRadius: 999,
-      padding: "5px 12px",
-      fontSize: 12,
-      fontWeight: 400,
-      lineHeight: 1.2,
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-    }}
-  >
-    <span
-      aria-hidden="true"
-      style={{
-        fontSize: 13,
-        lineHeight: 1,
-        opacity: 0.9,
-      }}
-    >
-      ＋
-    </span>
-    <span>New</span>
-  </Dropdown.Toggle>
+      <Dropdown align="end">
+        <Dropdown.Toggle
+          variant="primary"
+          id="dashboard-new-dropdown"
+          className="border-0 shadow-sm"
+          style={{
+            borderRadius: 999,
+            padding: "5px 12px",
+            fontSize: 12,
+            fontWeight: 400,
+            lineHeight: 1.2,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              fontSize: 13,
+              lineHeight: 1,
+              opacity: 0.9,
+            }}
+          >
+            ＋
+          </span>
+          <span>New</span>
+        </Dropdown.Toggle>
 
-  <Dropdown.Menu
-    style={{
-      borderRadius: 14,
-      padding: 8,
-      minWidth: 220,
-      border: "1px solid #e9ecef",
-      boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
-    }}
-  >
-    <Dropdown.Item
-      as={Link}
-      to="/students/new"
-      className="rounded-3"
-      style={{
-        padding: "9px 10px",
-        fontSize: 11,
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        color: "#6c757d",
-      }}
-    >
-      New Student
-    </Dropdown.Item>
+        <Dropdown.Menu
+          style={{
+            borderRadius: 14,
+            padding: 8,
+            minWidth: 220,
+            border: "1px solid #e9ecef",
+            boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
+          }}
+        >
+          <Dropdown.Item
+            as={Link}
+            to="/students/new"
+            className="rounded-3"
+            style={{
+              padding: "9px 10px",
+              fontSize: 11,
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: "#6c757d",
+            }}
+          >
+            New Student
+          </Dropdown.Item>
 
-    <Dropdown.Item
-      as={Link}
-      to="/rosters/new"
-      className="rounded-3"
-      style={{
-        padding: "9px 10px",
-        fontSize: 11,
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        color: "#6c757d",
-      }}
-    >
-      New Roster
-    </Dropdown.Item>
+          <Dropdown.Item
+            as={Link}
+            to="/rosters/new"
+            className="rounded-3"
+            style={{
+              padding: "9px 10px",
+              fontSize: 11,
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: "#6c757d",
+            }}
+          >
+            New Roster
+          </Dropdown.Item>
 
-    <Dropdown.Item
-      as={Link}
-      to={`/lesson-plans/new?date=${ymd(selectedDate)}`}
-      className="rounded-3"
-      style={{
-        padding: "9px 10px",
-        fontSize: 11,
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        color: "#6c757d",
-      }}
-    >
-      New Lesson Plan
-    </Dropdown.Item>
-  </Dropdown.Menu>
-</Dropdown>
+          <Dropdown.Item
+            as={Link}
+            to={`/lesson-plans/new?date=${ymd(selectedDate)}`}
+            className="rounded-3"
+            style={{
+              padding: "9px 10px",
+              fontSize: 11,
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: "#6c757d",
+            }}
+          >
+            New Lesson Plan
+          </Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown>
     );
   }
 
