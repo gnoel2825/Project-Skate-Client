@@ -286,6 +286,46 @@ class CalendarPage extends Component {
     if (this.state.rightMaxHeight !== max) this.setState({ rightMaxHeight: max });
   };
 
+  buildNoRosterLinks = (session) => {
+  const date = session?.taught_on || ymd(this.state.selectedDate);
+  const weekday = weekdayNumberFromYmd(date);
+  const startsAt = session?.starts_at || "";
+  const endsAt = session?.ends_at || "";
+  const location = session?.location || "";
+  const firstOccurrence = (session?.lessonPlans || [])[0] || null;
+  const lessonPlanId = firstOccurrence?.lesson_plan?.id || null;
+
+  const oneOffParams = new URLSearchParams();
+  oneOffParams.set("date", date);
+  if (startsAt) oneOffParams.set("starts_at", startsAt);
+  if (endsAt) oneOffParams.set("ends_at", endsAt);
+  if (location) oneOffParams.set("location", location);
+  if (lessonPlanId) oneOffParams.set("lesson_plan_id", String(lessonPlanId));
+  oneOffParams.set("mode", "add-one-off-meeting");
+
+  const weeklyParams = new URLSearchParams();
+  if (weekday != null) weeklyParams.set("weekday", String(weekday));
+  if (startsAt) weeklyParams.set("starts_at", startsAt);
+  if (endsAt) weeklyParams.set("ends_at", endsAt);
+  if (location) weeklyParams.set("location", location);
+  if (lessonPlanId) weeklyParams.set("lesson_plan_id", String(lessonPlanId));
+  weeklyParams.set("mode", "add-weekly-time");
+
+  const rescheduleParams = new URLSearchParams();
+  if (date) rescheduleParams.set("date", date);
+  if (startsAt) rescheduleParams.set("starts_at", startsAt);
+  if (endsAt) rescheduleParams.set("ends_at", endsAt);
+  if (location) rescheduleParams.set("location", location);
+
+  return {
+    addOneOffMeetingToRoster: `/rosters?${oneOffParams.toString()}`,
+    addWeeklyTimeToRoster: `/rosters?${weeklyParams.toString()}`,
+    rescheduleLessonPlan: lessonPlanId
+      ? `/lesson-plans/${lessonPlanId}?${rescheduleParams.toString()}`
+      : null,
+  };
+};
+
   loadWeeklyOverview = async () => {
     this.setState({ weeklyOverviewLoading: true, weeklyOverviewError: null });
 
@@ -926,10 +966,12 @@ class CalendarPage extends Component {
             <div className="d-grid mt-3" style={{ gap: 12 }}>
               {visibleSessions.map((session, idx) => {
                 const fallbackRoster = session.roster || this.findRosterById(session.rosterId);
+                const hasRoster = !!session.rosterId;
                 const rosterName = fallbackRoster?.name || "No Roster";
                 const mobileTime = formatTimeRange(session.starts_at, session.ends_at) || "Time TBD";
                 const tl = timeLabelShort(session.starts_at, session.ends_at);
                 const hasLessonPlans = (session.lessonPlans || []).length > 0;
+                const noRosterLinks = !hasRoster && hasLessonPlans ? this.buildNoRosterLinks(session) : null;
 
                 return (
                   <div
@@ -1018,56 +1060,134 @@ class CalendarPage extends Component {
                       >
                         <div className="d-flex justify-content-between align-items-start gap-3">
                           <div style={{ minWidth: 0 }}>
-                            {session.rosterId ? (
-                              <Link
-                                to={`/rosters/${session.rosterId}`}
-                                className="text-decoration-none"
-                                style={{ color: "inherit" }}
-                              >
-                                <div
-                                  style={{
-                                    fontWeight: 700,
-                                    wordBreak: "break-word",
-                                    lineHeight: 1.15,
-                                    cursor: "pointer",
-                                  }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                                >
-                                  {rosterName}
-                                </div>
-                              </Link>
-                            ) : (
-                              <div style={{ fontWeight: 700, wordBreak: "break-word", lineHeight: 1.15 }}>
-                                {rosterName}
-                              </div>
-                            )}
+                            {hasRoster ? (
+  <Link
+    to={`/rosters/${session.rosterId}`}
+    className="text-decoration-none"
+    style={{ color: "inherit" }}
+  >
+    <div
+      style={{
+        fontWeight: 700,
+        wordBreak: "break-word",
+        lineHeight: 1.15,
+        cursor: "pointer",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+    >
+      {rosterName}
+    </div>
+  </Link>
+) : (
+  <div style={{ fontWeight: 700, wordBreak: "break-word", lineHeight: 1.15 }}>
+    {rosterName}
+  </div>
+)}
 
-                            <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
-                              {session.source === "meeting" ? (
-                                <Badge bg="warning" text="dark" style={{ fontWeight: 600 }}>
-                                  one-off
-                                </Badge>
-                              ) : null}
+<div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+  {session.source === "meeting" ? (
+    <Badge bg="warning" text="dark" style={{ fontWeight: 600 }}>
+      one-off
+    </Badge>
+  ) : null}
 
-                              {session.weeklySchedule ? (
-                                <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
-                                  weekly
-                                </Badge>
-                              ) : null}
+  {session.weeklySchedule ? (
+    <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
+      weekly
+    </Badge>
+  ) : null}
 
-                              {session.location ? (
-                                <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
-                                  {session.location}
-                                </Badge>
-                              ) : null}
-                            </div>
+  {session.location ? (
+    <Badge bg="light" text="dark" style={{ fontWeight: 600 }}>
+      {session.location}
+    </Badge>
+  ) : null}
+</div>
 
-                            {session.notes ? (
-                              <div className="text-muted mt-2" style={{ fontSize: 12, lineHeight: 1.25 }}>
-                                {session.notes}
-                              </div>
-                            ) : null}
+{!hasRoster && hasLessonPlans ? (
+  <div
+    className="mt-3 border rounded-3 p-3"
+    style={{ background: "#fbfbfd", borderColor: "#e9ecef" }}
+  >
+    <div className="text-muted" style={{ fontSize: 12, lineHeight: 1.35 }}>
+      This lesson plan is not connected to a roster yet.
+    </div>
+
+    <div className="mt-2 d-flex flex-wrap gap-2 align-items-center">
+      <Dropdown align="start">
+        <Dropdown.Toggle
+          size="sm"
+          variant="outline-secondary"
+          className="rounded-pill px-3"
+          style={{ fontSize: 12 }}
+        >
+          Resolve
+        </Dropdown.Toggle>
+
+        <Dropdown.Menu
+          style={{
+            borderRadius: 14,
+            padding: 8,
+            minWidth: 250,
+            border: "1px solid #e9ecef",
+            boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
+          }}
+        >
+          <Dropdown.Item
+            as={Link}
+            to={noRosterLinks.addOneOffMeetingToRoster}
+            className="rounded-3"
+            style={{
+              padding: "9px 10px",
+              fontSize: 11,
+              letterSpacing: 0.4,
+              color: "#6c757d",
+            }}
+          >
+            Add one-off meeting to roster
+          </Dropdown.Item>
+
+          <Dropdown.Item
+            as={Link}
+            to={noRosterLinks.addWeeklyTimeToRoster}
+            className="rounded-3"
+            style={{
+              padding: "9px 10px",
+              fontSize: 11,
+              letterSpacing: 0.4,
+              color: "#6c757d",
+            }}
+          >
+            Add weekly time to roster
+          </Dropdown.Item>
+
+          {noRosterLinks.rescheduleLessonPlan ? (
+            <Dropdown.Item
+              as={Link}
+              to={noRosterLinks.rescheduleLessonPlan}
+              className="rounded-3"
+              style={{
+                padding: "9px 10px",
+                fontSize: 11,
+                letterSpacing: 0.4,
+                color: "#6c757d",
+              }}
+            >
+              Re-schedule lesson plan
+            </Dropdown.Item>
+          ) : null}
+        </Dropdown.Menu>
+      </Dropdown>
+    </div>
+  </div>
+) : null}
+
+{session.notes ? (
+  <div className="text-muted mt-2" style={{ fontSize: 12, lineHeight: 1.25 }}>
+    {session.notes}
+  </div>
+) : null}
                           </div>
                         </div>
 
