@@ -699,7 +699,7 @@ class CalendarPage extends Component {
           {loading && <p className="mt-3 text-muted">Loading…</p>}
 
           {!loading && !error && sessionsAll.length === 0 ? (
-            <div className="text-muted mt-3">No confirmed sessions scheduled for this date.</div>
+            <div className="text-muted mt-3">No classes scheduled for this date.</div>
           ) : null}
 
           {!loading && !error && sessionsAll.length > 0 ? (
