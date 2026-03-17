@@ -1,189 +1,290 @@
 import React, { Component } from "react";
 import api from "../api";
-import Form from "react-bootstrap/Form";
-import Button from "react-bootstrap/Button";
-import Alert from "react-bootstrap/Alert";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "react-bootstrap/Card";
+import Alert from "react-bootstrap/Alert";
+import Badge from "react-bootstrap/Badge";
+import Button from "react-bootstrap/Button";
+import Form from "react-bootstrap/Form";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
-import Badge from "react-bootstrap/Badge";
-import { useSearchParams, useNavigate } from "react-router-dom";
 
-/* ======================================================
-   Wrapper component (hooks live here)
-====================================================== */
 function CreateLessonPlanWithNavAndQuery(props) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const dateParam = searchParams.get("date"); // YYYY-MM-DD (optional)
-
+  const dateParam = searchParams.get("date");
   return <CreateLessonPlan {...props} dateParam={dateParam} navigate={navigate} />;
 }
 
 export default CreateLessonPlanWithNavAndQuery;
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL;
+const BTN_CLASS = "rounded-pill px-3";
+const BTN_STYLE = { fontSize: 12 };
 
-
-/* ======================================================
-   Helpers
-====================================================== */
 const ROLE = {
   MAIN: "main",
   WARMUP: "warmup",
   COOLDOWN: "cooldown",
 };
 
-const ROLE_LABEL = (role) => {
-  if (role === ROLE.WARMUP) return "Warm-up";
-  if (role === ROLE.COOLDOWN) return "Cool-down";
-  return "Main Lesson";
-};
+const SectionKicker = ({ children, className = "", style = {} }) => (
+  <div
+    className={`text-uppercase text-muted ${className}`}
+    style={{ fontSize: 11, letterSpacing: 0.6, ...style }}
+  >
+    {children}
+  </div>
+);
 
-const chunk = (arr, size) => {
-  const out = [];
-  for (let i = 0; i < (arr || []).length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-};
+function norm(s) {
+  return String(s || "").toLowerCase().trim();
+}
 
-const safeErrors = (err, fallback) => {
+function safeErrors(err, fallback) {
   const raw =
     err?.response?.data?.errors ||
     err?.response?.data?.error ||
     err?.message ||
     fallback;
   return Array.isArray(raw) ? raw : [String(raw)];
-};
+}
 
-/* ======================================================
-   Class component
-====================================================== */
+function sortSkills(skills) {
+  return (skills || []).slice().sort((a, b) => {
+    const levelDiff = (a.level ?? 0) - (b.level ?? 0);
+    if (levelDiff !== 0) return levelDiff;
+    return norm(a.name).localeCompare(norm(b.name));
+  });
+}
+
+function SectionEmpty({ children }) {
+  return (
+    <div
+      className="text-muted border rounded-3 p-3"
+      style={{ background: "#fbfbfd", borderColor: "#e9ecef", fontSize: 14 }}
+    >
+      {children}
+    </div>
+  );
+}
+
 class CreateLessonPlan extends Component {
   state = {
-    // details
     title: "",
     description: "",
 
-    // skills
     skills: [],
-    warmupSkillIds: new Set(),
-    mainSkillIds: new Set(),
-    cooldownSkillIds: new Set(),
 
-    // notes
+    draftSkillsByRole: {
+      main: [],
+      warmup: [],
+      cooldown: [],
+    },
+
     warmupNotes: "",
     mainNotes: "",
     cooldownNotes: "",
 
-    // ui
-    activeRole: ROLE.MAIN,
-    loadingSkills: false,
-    submitting: false,
-    errors: [],
+    addSkillsOpenByRole: {
+      main: true,
+      warmup: false,
+      cooldown: false,
+    },
+
+    skillSearchByRole: {
+      main: "",
+      warmup: "",
+      cooldown: "",
+    },
+
+    loadingSkills: true,
+    saving: false,
+    error: null,
     success: null,
   };
 
   componentDidMount() {
-    this.fetchSkills();
+    this.loadSkills();
   }
 
-  fetchSkills = () => {
-    this.setState({ loadingSkills: true, errors: [], success: null });
+  loadSkills = async () => {
+    this.setState({ loadingSkills: true, error: null });
 
-    api
-      .get(`/skills`)
-      .then((res) => this.setState({ skills: res.data || [], loadingSkills: false }))
-      .catch((err) =>
-        this.setState({
-          loadingSkills: false,
-          errors: safeErrors(err, "Failed to load skills"),
-        })
-      );
+    try {
+      const res = await api.get("/skills");
+      this.setState({
+        skills: res.data || [],
+        loadingSkills: false,
+      });
+    } catch (err) {
+      this.setState({
+        loadingSkills: false,
+        error: safeErrors(err, "Failed to load skills").join(", "),
+      });
+    }
   };
 
-  handleChange = (e) => this.setState({ [e.target.name]: e.target.value });
-
-  getSelectedSetForRole = (role) => {
-    if (role === ROLE.WARMUP) return this.state.warmupSkillIds;
-    if (role === ROLE.COOLDOWN) return this.state.cooldownSkillIds;
-    return this.state.mainSkillIds;
+  handleFieldChange = (e) => {
+    this.setState({ [e.target.name]: e.target.value });
   };
 
-  setSelectedSetForRole = (role, nextSet) => {
-    if (role === ROLE.WARMUP) return this.setState({ warmupSkillIds: nextSet });
-    if (role === ROLE.COOLDOWN) return this.setState({ cooldownSkillIds: nextSet });
-    return this.setState({ mainSkillIds: nextSet });
+  toggleAddSkillsOpen = (role) => {
+    this.setState((prev) => ({
+      addSkillsOpenByRole: {
+        ...prev.addSkillsOpenByRole,
+        [role]: !prev.addSkillsOpenByRole[role],
+      },
+    }));
   };
 
-  getNotesKeyForRole = (role) => {
-    if (role === ROLE.WARMUP) return "warmupNotes";
-    if (role === ROLE.COOLDOWN) return "cooldownNotes";
-    return "mainNotes";
+  changeSkillSearch = (role, value) => {
+    this.setState((prev) => ({
+      skillSearchByRole: {
+        ...prev.skillSearchByRole,
+        [role]: value,
+      },
+    }));
   };
 
-  toggleSkill = (role, skillId) => {
-    const current = this.getSelectedSetForRole(role);
-    const next = new Set(current);
-    if (next.has(skillId)) next.delete(skillId);
-    else next.add(skillId);
-    this.setSelectedSetForRole(role, next);
+  clearSkillSearch = (role) => {
+    this.setState((prev) => ({
+      skillSearchByRole: {
+        ...prev.skillSearchByRole,
+        [role]: "",
+      },
+    }));
   };
 
-  groupByLevel = (skills) => {
-    return (skills || []).reduce((acc, s) => {
-      const level = s.level ?? 0;
-      if (!acc[level]) acc[level] = [];
-      acc[level].push(s);
-      return acc;
-    }, {});
+  toggleAddSkill = (role, skill) => {
+    this.setState((prev) => {
+      const current = prev.draftSkillsByRole[role] || [];
+      const exists = current.some((s) => s.id === skill.id);
+
+      return {
+        draftSkillsByRole: {
+          ...prev.draftSkillsByRole,
+          [role]: exists ? current : [...current, skill],
+        },
+        success: null,
+        error: null,
+      };
+    });
   };
 
-  // ✅ ONE STEP: create lesson plan (details + notes) THEN add skills THEN navigate
-  createOneStep = async (e) => {
-    e.preventDefault();
+  removeSkill = (role, skillId) => {
+    this.setState((prev) => ({
+      draftSkillsByRole: {
+        ...prev.draftSkillsByRole,
+        [role]: (prev.draftSkillsByRole[role] || []).filter((s) => s.id !== skillId),
+      },
+      success: null,
+      error: null,
+    }));
+  };
 
-    const title = (this.state.title || "").trim();
-    const description = (this.state.description || "").trim();
-    if (!title) return this.setState({ errors: ["Title is required."] });
+  clearSection = (role) => {
+    const notesKey =
+      role === ROLE.WARMUP
+        ? "warmupNotes"
+        : role === ROLE.COOLDOWN
+        ? "cooldownNotes"
+        : "mainNotes";
 
-    this.setState({ submitting: true, errors: [], success: null });
+    this.setState((prev) => ({
+      draftSkillsByRole: {
+        ...prev.draftSkillsByRole,
+        [role]: [],
+      },
+      [notesKey]: "",
+      skillSearchByRole: {
+        ...prev.skillSearchByRole,
+        [role]: "",
+      },
+      success: null,
+      error: null,
+    }));
+  };
+
+  clearAll = () => {
+    this.setState({
+      title: "",
+      description: "",
+      draftSkillsByRole: {
+        main: [],
+        warmup: [],
+        cooldown: [],
+      },
+      warmupNotes: "",
+      mainNotes: "",
+      cooldownNotes: "",
+      addSkillsOpenByRole: {
+        main: true,
+        warmup: false,
+        cooldown: false,
+      },
+      skillSearchByRole: {
+        main: "",
+        warmup: "",
+        cooldown: "",
+      },
+      success: null,
+      error: null,
+    });
+  };
+
+  scrollToSection = (sectionId) => {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    window.setTimeout(() => {
+      if (typeof el.focus === "function") el.focus();
+    }, 250);
+  };
+
+  createLessonPlan = async () => {
+    const {
+      title,
+      description,
+      warmupNotes,
+      mainNotes,
+      cooldownNotes,
+      draftSkillsByRole,
+    } = this.state;
+
+    if (!(title || "").trim()) {
+      this.setState({ error: "Title is required.", success: null });
+      return;
+    }
+
+    this.setState({ saving: true, error: null, success: null });
 
     let lessonPlanId = null;
 
     try {
-      // 1) Create plan (includes notes)
-      const lpRes = await api.post(
-        `/lesson_plans`,
-        {
-          lesson_plan: {
-            title,
-            description,
-            warmup_notes: this.state.warmupNotes,
-            main_notes: this.state.mainNotes,
-            cooldown_notes: this.state.cooldownNotes,
-          },
-        }
-      );
+      const lpRes = await api.post("/lesson_plans", {
+        lesson_plan: {
+          title: (title || "").trim(),
+          description: (description || "").trim(),
+          warmup_notes: (warmupNotes || "").trim(),
+          main_notes: (mainNotes || "").trim(),
+          cooldown_notes: (cooldownNotes || "").trim(),
+        },
+      });
 
       lessonPlanId = lpRes.data?.id;
 
-      // 2) Add skills (v2)
       const payloadV2 = {
-        warmup_skill_ids: Array.from(this.state.warmupSkillIds),
-        skill_ids: Array.from(this.state.mainSkillIds),
-        cooldown_skill_ids: Array.from(this.state.cooldownSkillIds),
+        warmup_skill_ids: (draftSkillsByRole.warmup || []).map((s) => s.id),
+        skill_ids: (draftSkillsByRole.main || []).map((s) => s.id),
+        cooldown_skill_ids: (draftSkillsByRole.cooldown || []).map((s) => s.id),
       };
 
-      await api.post(
-        `/lesson_plans/${lessonPlanId}/add_skills`,
-        payloadV2,
-      );
+      await api.post(`/lesson_plans/${lessonPlanId}/add_skills`, payloadV2);
 
-      // 3) Navigate
-      this.setState({ submitting: false });
+      this.setState({ saving: false });
       this.props.navigate(`/lesson-plans/${lessonPlanId}`);
     } catch (err) {
-      // Fallback: if add_skills v2 fails, try legacy payload (combine)
       const isAddSkillsFail =
         typeof err?.config?.url === "string" && err.config.url.includes("/add_skills");
 
@@ -191,51 +292,278 @@ class CreateLessonPlan extends Component {
         try {
           const legacy = Array.from(
             new Set([
-              ...Array.from(this.state.warmupSkillIds),
-              ...Array.from(this.state.mainSkillIds),
-              ...Array.from(this.state.cooldownSkillIds),
+              ...(draftSkillsByRole.warmup || []).map((s) => s.id),
+              ...(draftSkillsByRole.main || []).map((s) => s.id),
+              ...(draftSkillsByRole.cooldown || []).map((s) => s.id),
             ])
           );
 
-          await api.post(
-            `/lesson_plans/${lessonPlanId}/add_skills`,
-            { skill_ids: legacy }
-          );
+          await api.post(`/lesson_plans/${lessonPlanId}/add_skills`, {
+            skill_ids: legacy,
+          });
 
-          this.setState({ submitting: false });
+          this.setState({ saving: false });
           this.props.navigate(`/lesson-plans/${lessonPlanId}`);
           return;
         } catch (err2) {
           this.setState({
-            submitting: false,
-            errors: safeErrors(err2, "Failed to add skills"),
+            saving: false,
+            error: safeErrors(err2, "Failed to add skills").join(", "),
           });
           return;
         }
       }
 
       this.setState({
-        submitting: false,
-        errors: safeErrors(err, "Failed to create lesson plan"),
+        saving: false,
+        error: safeErrors(err, "Failed to create lesson plan").join(", "),
       });
     }
   };
 
-  clearRole = (role) => {
-    this.setSelectedSetForRole(role, new Set());
-    const notesKey = this.getNotesKeyForRole(role);
-    this.setState({ [notesKey]: "" });
-  };
+  renderSectionCard = ({ title, role, skills, notes, searchQuery, addSkillsOpen, allSkills }) => {
+    const currentSkillIds = new Set((skills || []).map((s) => s.id));
 
-  clearAll = () => {
-    this.setState({
-      warmupSkillIds: new Set(),
-      mainSkillIds: new Set(),
-      cooldownSkillIds: new Set(),
-      warmupNotes: "",
-      mainNotes: "",
-      cooldownNotes: "",
-    });
+    const availableSkillsRaw = (allSkills || []).filter((s) => !currentSkillIds.has(s.id));
+    const q = norm(searchQuery);
+
+    const availableSkills = q
+      ? availableSkillsRaw.filter((s) => {
+          const name = norm(s?.name);
+          const level = String(s?.level ?? "");
+          const category = norm(s?.category);
+          const basicLabel = `basic ${level}`.trim();
+
+          return (
+            name.includes(q) ||
+            level.includes(q) ||
+            category.includes(q) ||
+            basicLabel.includes(q) ||
+            (q.includes("basic") && level.length > 0)
+          );
+        })
+      : availableSkillsRaw;
+
+    const availableByLevel = availableSkills.reduce((acc, s) => {
+      const lvl = s.level ?? 0;
+      acc[lvl] = acc[lvl] || [];
+      acc[lvl].push(s);
+      return acc;
+    }, {});
+
+    const levels = Object.keys(availableByLevel)
+      .map(Number)
+      .filter((n) => n > 0)
+      .sort((a, b) => a - b);
+
+    return (
+      <Card className="mb-3 border-0 shadow-sm">
+        <Card.Body>
+          <div className="d-flex align-items-center gap-2 mb-3">
+            <SectionKicker>{title}</SectionKicker>
+            <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+            <Badge bg="light" text="dark" className="border" style={{ fontSize: 11 }}>
+              {skills.length}
+            </Badge>
+          </div>
+
+          <div className="mb-3">
+            <div className="d-flex justify-content-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                className={BTN_CLASS}
+                style={BTN_STYLE}
+                variant={addSkillsOpen ? "secondary" : "outline-secondary"}
+                onClick={() => this.toggleAddSkillsOpen(role)}
+                disabled={this.state.saving}
+                aria-expanded={addSkillsOpen}
+                aria-controls={`add-skills-panel-${role}`}
+              >
+                {addSkillsOpen ? "Hide" : "Add Skills"}
+              </Button>
+
+              <Button
+                size="sm"
+                className={BTN_CLASS}
+                style={BTN_STYLE}
+                variant="outline-secondary"
+                onClick={() => this.clearSection(role)}
+                disabled={this.state.saving && skills.length === 0 && !notes}
+              >
+                Clear section
+              </Button>
+            </div>
+
+            {addSkillsOpen ? (
+              <div
+                id={`add-skills-panel-${role}`}
+                className="border rounded-3 p-3 mt-3"
+                style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
+              >
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <SectionKicker>{title} Skill Builder</SectionKicker>
+                  <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                </div>
+
+                <div className="mb-3">
+                  <div className="fw-semibold mb-2" style={{ fontSize: 13 }}>
+                    Search
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2">
+                    <Form.Control
+                      type="text"
+                      placeholder={`Search skills for ${title.toLowerCase()}…`}
+                      value={searchQuery}
+                      onChange={(e) => this.changeSkillSearch(role, e.target.value)}
+                      disabled={this.state.saving}
+                      style={{ borderRadius: 12 }}
+                    />
+                    <Button
+                      size="sm"
+                      className={BTN_CLASS}
+                      style={BTN_STYLE}
+                      variant="outline-secondary"
+                      onClick={() => this.clearSkillSearch(role)}
+                      disabled={this.state.saving || !searchQuery}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+
+                  <div className="form-text mt-1">Search by name, level, or category.</div>
+                </div>
+
+                <div
+                  className="border rounded-3 p-3"
+                  style={{
+                    background: "#fff",
+                    borderColor: "#e9ecef",
+                    minHeight: 180,
+                  }}
+                >
+                  {this.state.loadingSkills ? (
+                    <p className="text-muted mb-0">Loading skills…</p>
+                  ) : availableSkillsRaw.length === 0 ? (
+                    <p className="text-muted mb-0">No more skills available to add.</p>
+                  ) : levels.length === 0 ? (
+                    <p className="text-muted mb-0">
+                      {searchQuery ? "No matches for that search." : "No skills available to add."}
+                    </p>
+                  ) : (
+                    <div
+                      style={{
+                        maxHeight: 280,
+                        overflowY: "auto",
+                        paddingRight: 4,
+                      }}
+                    >
+                      {levels.map((lvl) => (
+                        <div key={`${role}-level-${lvl}`} className="mb-3">
+                          <div className="fw-semibold mb-2">Basic {lvl}</div>
+
+                          {sortSkills(availableByLevel[lvl]).map((skill) => (
+                            <div
+                              key={`${role}-available-${skill.id}`}
+                              className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2 mb-2"
+                              style={{
+                                background: "#fff",
+                                borderColor: "#e9ecef",
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 14, lineHeight: 1.35 }}>
+                                  <strong>Basic {skill.level}</strong> — {skill.name}
+                                </div>
+                              </div>
+
+                              <Button
+                                size="sm"
+                                className={`${BTN_CLASS} flex-shrink-0`}
+                                style={BTN_STYLE}
+                                variant="outline-primary"
+                                onClick={() => this.toggleAddSkill(role, skill)}
+                                disabled={this.state.saving}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mb-3">
+            <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+              Skills
+            </div>
+
+            {skills.length === 0 ? (
+              <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
+            ) : (
+              <div className="d-grid" style={{ gap: 8 }}>
+                {sortSkills(skills).map((skill) => (
+                  <div
+                    key={`${role}-skill-${skill.id}`}
+                    className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2"
+                    style={{
+                      background: "#fff",
+                      borderColor: "#e9ecef",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, lineHeight: 1.35 }}>
+                        <strong>Basic {skill.level}</strong> — {skill.name}
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      variant="outline-danger"
+                      className={`${BTN_CLASS} flex-shrink-0`}
+                      style={BTN_STYLE}
+                      onClick={() => this.removeSkill(role, skill.id)}
+                      disabled={this.state.saving}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+              Notes
+            </div>
+
+            <Form.Control
+              as="textarea"
+              rows={4}
+              value={notes || ""}
+              onChange={(e) => {
+                const key =
+                  role === ROLE.WARMUP
+                    ? "warmupNotes"
+                    : role === ROLE.COOLDOWN
+                    ? "cooldownNotes"
+                    : "mainNotes";
+                this.setState({ [key]: e.target.value });
+              }}
+              disabled={this.state.saving}
+              placeholder={`Add notes for ${title.toLowerCase()}…`}
+              style={{ borderRadius: 12 }}
+            />
+          </div>
+        </Card.Body>
+      </Card>
+    );
   };
 
   render() {
@@ -243,234 +571,210 @@ class CreateLessonPlan extends Component {
       title,
       description,
       skills,
-      warmupSkillIds,
-      mainSkillIds,
-      cooldownSkillIds,
-      activeRole,
-      loadingSkills,
-      submitting,
-      errors,
+      draftSkillsByRole,
+      addSkillsOpenByRole,
+      skillSearchByRole,
+      saving,
+      error,
       success,
+      warmupNotes,
+      mainNotes,
+      cooldownNotes,
     } = this.state;
 
-    const totalSelected = warmupSkillIds.size + mainSkillIds.size + cooldownSkillIds.size;
+    const warmupSkills = draftSkillsByRole.warmup || [];
+    const mainSkills = draftSkillsByRole.main || [];
+    const cooldownSkills = draftSkillsByRole.cooldown || [];
 
-    const grouped = this.groupByLevel(skills);
-    const levels = Object.keys(grouped)
-      .map(Number)
-      .filter((n) => n > 0)
-      .sort((a, b) => a - b);
+    const totalSkills = warmupSkills.length + mainSkills.length + cooldownSkills.length;
+    const hasAnyContent =
+      !!title.trim() ||
+      !!description.trim() ||
+      totalSkills > 0 ||
+      !!warmupNotes.trim() ||
+      !!mainNotes.trim() ||
+      !!cooldownNotes.trim();
 
-    const selectedSet = this.getSelectedSetForRole(activeRole);
-    const notesKey = this.getNotesKeyForRole(activeRole);
-
-    // Keep mobile from feeling like an endless page:
-    // - Skills list scrolls inside card.
-    // - Buttons wrap.
-    const maxListHeight = 420;
-
-    const canSubmit = !submitting && !!(title || "").trim();
+    const tocItems = [
+      { id: "lesson-overview", label: "Overview" },
+      { id: "section-warmup", label: `Warm-up (${warmupSkills.length})` },
+      { id: "section-main", label: `Main Lesson (${mainSkills.length})` },
+      { id: "section-cooldown", label: `Cool-down (${cooldownSkills.length})` },
+    ];
 
     return (
-      <div className="container mt-4" style={{ maxWidth: 1000 }}>
-        {/* Header (mobile-friendly) */}
-        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3">
-          <h1 className="mb-0">Create Lesson Plan</h1>
+      <div className="container mt-4" style={{ maxWidth: 1100 }}>
+        {success ? <Alert variant="success">{success}</Alert> : null}
+        {error ? <Alert variant="danger">{error}</Alert> : null}
 
-          <div className="d-flex gap-2 flex-wrap">
-            <Button
-              variant="primary"
-              onClick={this.createOneStep}
-              disabled={!canSubmit}
+        <div className="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <a
+              href="/lesson-plans"
+              className="text-decoration-none"
+              onClick={(e) => {
+                e.preventDefault();
+                this.props.navigate("/lesson-plans");
+              }}
             >
-              {submitting ? "Creating..." : "Create lesson plan"}
+              ← Back to lesson plans
+            </a>
+          </div>
+
+          <div className="d-flex gap-2 flex-wrap align-items-center">
+            <Button
+              size="sm"
+              variant="outline-secondary"
+              className={BTN_CLASS}
+              style={BTN_STYLE}
+              onClick={this.clearAll}
+              disabled={saving || !hasAnyContent}
+            >
+              Clear
             </Button>
 
             <Button
-              variant="outline-secondary"
-              onClick={this.clearAll}
-              disabled={submitting || (totalSelected === 0 && !this.state.warmupNotes && !this.state.mainNotes && !this.state.cooldownNotes)}
+              size="sm"
+              variant="primary"
+              className={BTN_CLASS}
+              style={BTN_STYLE}
+              onClick={this.createLessonPlan}
+              disabled={saving || !title.trim()}
             >
-              Clear all
+              {saving ? "Creating..." : "Create Lesson Plan"}
             </Button>
           </div>
         </div>
 
-        {success && <Alert variant="success">{success}</Alert>}
-
-        {errors.length > 0 && (
-          <Alert variant="danger">
-            <ul className="mb-0">
-              {errors.map((e, i) => (
-                <li key={i}>{e}</li>
-              ))}
-            </ul>
-          </Alert>
-        )}
-
-        {/* ONE STEP FORM: details + skills */}
-        <Form onSubmit={this.createOneStep}>
-          <Row className="g-3">
-            {/* Details */}
-           {/* Details */}
-<Col lg={5}>
-  <Card className="mb-3 mb-lg-0">
-    <Card.Body>
-      <Card.Title className="mb-3">Details</Card.Title>
-
-      <Form.Group className="mb-3">
-        <Form.Label>Title</Form.Label>
-        <Form.Control
-          name="title"
-          value={title}
-          onChange={this.handleChange}
-          required
-          disabled={submitting}
-          placeholder="e.g. Basic Edges + One-foot Glides"
-        />
-      </Form.Group>
-
-      <Form.Group className="mb-2">
-        <Form.Label>Description</Form.Label>
-        <Form.Control
-          as="textarea"
-          rows={4}
-          name="description"
-          value={description}
-          onChange={this.handleChange}
-          disabled={submitting}
-          placeholder="Optional: goals, focus points, reminders…"
-        />
-      </Form.Group>
-
-      <div className="text-muted" style={{ fontSize: 13 }}>
-        Tip: Use the tabs on the right to add Warm-up / Main / Cool-down skills and notes.
-      </div>
-
-      {/* Mobile: put submit button here too */}
-      <div className="d-grid d-sm-none mt-3">
-        <Button type="submit" variant="primary" disabled={!canSubmit}>
-          {submitting ? "Creating..." : "Create lesson plan"}
-        </Button>
-      </div>
-    </Card.Body>
-  </Card>
-</Col>
-
-            {/* Skills + Notes */}
-            <Col lg={7}>
-              <Card className="h-100">
-                <Card.Body>
-                  <Card.Title className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
-                    <span>Skills</span>
-                  </Card.Title>
-
-                  {/* Role toggle */}
-                  {/* Role toggle buttons (labels include selected counts) */}
-<div className="d-flex gap-2 mt-2 flex-wrap">
-  {[
-    { key: "warmup", label: `Warm-up (${warmupSkillIds.size})` },
-    { key: "main", label: `Main (${mainSkillIds.size})` },
-    { key: "cooldown", label: `Cool-down (${cooldownSkillIds.size})` },
-  ].map(({ key, label }) => (
-    <Button
-      key={key}
-      size="sm"
-      variant={this.state.activeRole === key ? "primary" : "outline-secondary"}
-      onClick={() => this.setState({ activeRole: key })}
-      disabled={submitting}
-    >
-      {label}
-    </Button>
-  ))}
-                    <Button
-                      size="sm"
-                      variant="outline-secondary"
-                      onClick={() => this.clearRole(activeRole)}
-                      disabled={submitting && selectedSet.size === 0 && !this.state[notesKey]}
-                      style={{ marginLeft: "auto" }}
-                    >
-                      Clear this section
-                    </Button>
+        <div id="lesson-overview" tabIndex="-1">
+          <Card className="mb-4 border-0 shadow-sm" style={{ borderRadius: 18 }}>
+            <Card.Body className="p-4">
+              <div className="d-flex flex-column flex-xl-row gap-4 align-items-start">
+                <div style={{ flex: 1, minWidth: 0, maxWidth: 760 }}>
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <SectionKicker>Lesson Plan Builder</SectionKicker>
+                    <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
                   </div>
 
-                  {/* Active section header */}
-                  <div className="d-flex justify-content-between align-items-center mt-3">
-                    <div className="fw-semibold">{ROLE_LABEL(activeRole)}</div>
-                    <div className="text-muted" style={{ fontSize: 13 }}>
-                      {selectedSet.size} selected
-                    </div>
+                  <div className="text-muted mb-4" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    Create the lesson title and description here, then build out each section below
+                    with skills and notes.
                   </div>
 
-                  {loadingSkills ? (
-                    <p className="mt-3">Loading skills…</p>
-                  ) : levels.length === 0 ? (
-                    <p className="text-muted mt-3 mb-0">No skills available.</p>
-                  ) : (
-                    <div
-                      className="mt-2"
-                      style={{
-                        maxHeight: maxListHeight,
-                        overflowY: "auto",
-                        border: "1px solid rgba(0,0,0,0.075)",
-                        borderRadius: 8,
-                        padding: 10,
-                      }}
-                    >
-                      {levels.map((level) => {
-                        const list = (grouped[level] || []).slice().sort((a, b) =>
-                          (a.name || "").localeCompare(b.name || "")
-                        );
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-semibold">Title</Form.Label>
+                    <Form.Control
+                      name="title"
+                      value={title}
+                      onChange={this.handleFieldChange}
+                      disabled={saving}
+                      placeholder="Lesson plan title"
+                      style={{ borderRadius: 12 }}
+                    />
+                  </Form.Group>
 
-                        // Optional: chunk into 2 columns on md+ for readability
-                        const cols = chunk(list, Math.ceil(list.length / 2));
-
-                        return (
-                          <div key={`${activeRole}-${level}`} className="mb-3">
-                            <div className="fw-semibold mb-2">Basic {level}</div>
-
-                            <Row className="g-2">
-                              {cols.map((colSkills, idx) => (
-                                <Col key={`${activeRole}-${level}-${idx}`} xs={12} md={6}>
-                                  {colSkills.map((skill) => (
-                                    <Form.Check
-                                      key={`${activeRole}-skill-${skill.id}`}
-                                      id={`${activeRole}-skill-${skill.id}`}
-                                      label={skill.name}
-                                      checked={selectedSet.has(skill.id)}
-                                      onChange={() => this.toggleSkill(activeRole, skill.id)}
-                                      disabled={submitting}
-                                      className="mb-2"
-                                    />
-                                  ))}
-                                </Col>
-                              ))}
-                            </Row>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Notes box (changes with activeRole) */}
-                  <Form.Group className="mt-3">
-                    <Form.Label className="text-muted" style={{ fontSize: 12 }}>
-                      Notes / custom skills for {ROLE_LABEL(activeRole)}
-                    </Form.Label>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Description</Form.Label>
                     <Form.Control
                       as="textarea"
                       rows={3}
-                      value={this.state[notesKey]}
-                      onChange={(e) => this.setState({ [notesKey]: e.target.value })}
-                      disabled={submitting}
-                      placeholder="Add your own notes or custom skills…"
+                      name="description"
+                      value={description}
+                      onChange={this.handleFieldChange}
+                      disabled={saving}
+                      placeholder="Optional lesson overview, goals, or reminders…"
+                      style={{ borderRadius: 12 }}
                     />
                   </Form.Group>
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </Form>
+                </div>
+
+                <div
+                  className="border rounded-4 p-3"
+                  style={{
+                    width: "100%",
+                    maxWidth: 260,
+                    background: "#fcfcff",
+                    borderColor: "#e9ecef",
+                  }}
+                >
+                  <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+                    On this page
+                  </div>
+
+                  <div className="d-flex flex-column align-items-start" style={{ gap: 6 }}>
+                    {tocItems.map((item) => (
+                      <Button
+                        key={item.id}
+                        variant="link"
+                        className="p-0 text-decoration-none text-start"
+                        style={{ fontSize: 14, color: "#495057" }}
+                        onClick={() => this.scrollToSection(item.id)}
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div
+                    className="mt-3 pt-3"
+                    style={{ borderTop: "1px solid #e9ecef", fontSize: 13 }}
+                  >
+                    <div className="text-muted mb-1">Selected skills</div>
+                    <div className="fw-semibold">{totalSkills}</div>
+                  </div>
+                </div>
+              </div>
+            </Card.Body>
+          </Card>
+        </div>
+
+        <div id="section-warmup" tabIndex="-1">
+          {this.renderSectionCard({
+            title: "Warm-up",
+            role: ROLE.WARMUP,
+            skills: warmupSkills,
+            notes: warmupNotes,
+            searchQuery: skillSearchByRole.warmup,
+            addSkillsOpen: addSkillsOpenByRole.warmup,
+            allSkills: skills,
+          })}
+        </div>
+
+        <div id="section-main" tabIndex="-1">
+          {this.renderSectionCard({
+            title: "Main Lesson",
+            role: ROLE.MAIN,
+            skills: mainSkills,
+            notes: mainNotes,
+            searchQuery: skillSearchByRole.main,
+            addSkillsOpen: addSkillsOpenByRole.main,
+            allSkills: skills,
+          })}
+        </div>
+
+        <div id="section-cooldown" tabIndex="-1">
+          {this.renderSectionCard({
+            title: "Cool-down",
+            role: ROLE.COOLDOWN,
+            skills: cooldownSkills,
+            notes: cooldownNotes,
+            searchQuery: skillSearchByRole.cooldown,
+            addSkillsOpen: addSkillsOpenByRole.cooldown,
+            allSkills: skills,
+          })}
+        </div>
+
+        <div className="pb-4 d-flex justify-content-end">
+          <Button
+            variant="primary"
+            className={BTN_CLASS}
+            style={BTN_STYLE}
+            onClick={this.createLessonPlan}
+            disabled={saving || !title.trim()}
+          >
+            {saving ? "Creating..." : "Create Lesson Plan"}
+          </Button>
+        </div>
       </div>
     );
   }
