@@ -8,6 +8,7 @@ import Form from "react-bootstrap/Form";
 import Badge from "react-bootstrap/Badge";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
+import RosterLessonPlanSchedulerCard from "./RosterLessonPlanScheduler";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL; // (ok to keep even if unused)
 
@@ -1588,78 +1589,15 @@ class RosterShow extends Component {
             </Row>
           </Card.Body>
         </Card>
+<br/>
+        <RosterLessonPlanSchedulerCard
+  roster={roster}
+  onScheduled={() => {
+        this.loadPage();
+  }}
+/>
 
-        {/* Lesson Plans */}
-        <Card className="mt-3" style={{ borderRadius: 14 }}>
-          <Card.Body>
-            <Card.Title className="d-flex justify-content-between align-items-center">
-              <span>Lesson Plans</span>
-              <Badge bg="secondary">{allOccs.length}</Badge>
-            </Card.Title>
-
-            {this.state.lessonPlansError && <Alert variant="danger">{this.state.lessonPlansError}</Alert>}
-            {this.state.lessonPlansLoading && <p className="text-muted mb-0">Loading…</p>}
-
-            {!this.state.lessonPlansLoading && allOccs.length === 0 && (
-              <p className="text-muted mb-0">
-                No lesson plans scheduled during this roster’s weekly meeting times (or one-off meetings).
-              </p>
-            )}
-
-            {!this.state.lessonPlansLoading && allOccs.length > 0 && (
-              <div className="d-grid" style={{ gap: 10 }}>
-                {allOccs.map((occ) => {
-                  const lpId = occ?.lesson_plan?.id || occ?.lesson_plan_id;
-                  const base = lpId ? `/lesson-plans/${lpId}?roster_id=${id}` : "#";
-
-                  return (
-                    <div
-                      key={occ.id}
-                      className="border rounded-3 p-2 d-flex justify-content-between align-items-start"
-                      style={{ gap: 10 }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div className="fw-semibold" style={{ wordBreak: "break-word" }}>
-                          <Link to={base}>{occ?.lesson_plan?.title || "Lesson Plan"}</Link>
-
-                          <div className="mt-2 d-flex gap-2 flex-wrap">
-                            {occ.__source === "meeting" ? (
-                              <Badge bg="light" text="dark" className="ms-2">
-                                one-off
-                              </Badge>
-                            ) : (
-                              <Badge bg="light" text="dark" className="ms-2">
-                                weekly
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="text-muted" style={{ fontSize: 13, wordBreak: "break-word" }}>
-                          {this.fmtDate(occ.taught_on)}
-                          {` • ${this.fmtTimeRangeAny(occ.starts_at, occ.ends_at)}`}
-                          {occ.location ? ` • ${occ.location}` : ""}
-                        </div>
-                      </div>
-
-                      <Button
-                        size="sm"
-                        variant="outline-danger"
-                        className="btn btn-outline-primary btn-sm rounded-pill px-3"
-                        style={{ fontSize: 12, minWidth: 84 }}
-                        disabled={this.state.lessonPlanDeletingOccId === occ.id}
-                        onClick={() => this.removeLessonPlanFromRoster(occ)}
-                      >
-                        {this.state.lessonPlanDeletingOccId === occ.id ? "Removing…" : "Remove"}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card.Body>
-        </Card>
-      </div>
+       </div>
     );
   }
 }

@@ -9,6 +9,7 @@ import Form from "react-bootstrap/Form";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 import InputGroup from "react-bootstrap/InputGroup";
+import Spinner from "react-bootstrap/Spinner";
 import {
   DndContext,
   PointerSensor,
@@ -139,7 +140,8 @@ const formatDateShort = (yyyyMmDd) => {
 
 const formatDateLong = (value) => {
   if (!value) return "";
-  const dt = new Date(value);
+  const [y, m, d] = String(value).split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
   if (Number.isNaN(dt.getTime())) return "";
   return new Intl.DateTimeFormat(undefined, {
     month: "long",
@@ -197,6 +199,7 @@ function occurrenceSignature(occ) {
     starts_at: occ?.starts_at || "",
     ends_at: occ?.ends_at || "",
     location: occ?.location || "",
+    roster_id: occ?.roster_id || "",
   });
 }
 
@@ -342,30 +345,30 @@ function DraggableSkillRow({
           boxShadow: isOverlay || isDragging ? "0 10px 24px rgba(0,0,0,0.12)" : "none",
         }}
       >
-       <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
+        <div className="d-flex align-items-center gap-2" style={{ minWidth: 0 }}>
           <button
-  type="button"
-  {...(isOverlay ? {} : attributes)}
-  {...(isOverlay ? {} : listeners)}
-  disabled={disabled}
-  aria-label={`Drag ${skill.name}`}
-  className="btn btn-light border-0 px-2 py-1 mt-1"
-  style={{
-  cursor: disabled ? "default" : "grab",
-  fontSize: 16,
-  lineHeight: 1,
-  color: "#6c757d",
-  borderRadius: 10,
-  flexShrink: 0,
-  minWidth: 40,
-  minHeight: 40,
-  touchAction: "none",
-  WebkitUserSelect: "none",
-  userSelect: "none",
-}}
->
-  ⋮⋮
-</button>
+            type="button"
+            {...(isOverlay ? {} : attributes)}
+            {...(isOverlay ? {} : listeners)}
+            disabled={disabled}
+            aria-label={`Drag ${skill.name}`}
+            className="btn btn-light border-0 px-2 py-1 mt-1"
+            style={{
+              cursor: disabled ? "default" : "grab",
+              fontSize: 16,
+              lineHeight: 1,
+              color: "#6c757d",
+              borderRadius: 10,
+              flexShrink: 0,
+              minWidth: 40,
+              minHeight: 40,
+              touchAction: "none",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+            }}
+          >
+            ⋮⋮
+          </button>
 
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 14, lineHeight: 1.35 }}>
@@ -424,22 +427,22 @@ function LessonSectionCard({
 
   const availableSkillsRaw = (allSkills || []).filter((s) => !currentSkillIds.has(s.id));
   const q = norm(searchQuery);
- const availableSkills = q
-  ? availableSkillsRaw.filter((s) => {
-      const name = norm(s?.name);
-      const level = String(s?.level ?? "");
-      const category = norm(s?.category);
-      const basicLabel = `basic ${level}`.trim();
+  const availableSkills = q
+    ? availableSkillsRaw.filter((s) => {
+        const name = norm(s?.name);
+        const level = String(s?.level ?? "");
+        const category = norm(s?.category);
+        const basicLabel = `basic ${level}`.trim();
 
-      return (
-        name.includes(q) ||
-        level.includes(q) ||
-        category.includes(q) ||
-        basicLabel.includes(q) ||
-        (q.includes("basic") && level.length > 0)
-      );
-    })
-  : availableSkillsRaw;
+        return (
+          name.includes(q) ||
+          level.includes(q) ||
+          category.includes(q) ||
+          basicLabel.includes(q) ||
+          (q.includes("basic") && level.length > 0)
+        );
+      })
+    : availableSkillsRaw;
 
   const availableByLevel = availableSkills.reduce((acc, s) => {
     const lvl = s.level ?? 0;
@@ -464,212 +467,208 @@ function LessonSectionCard({
           </Badge>
         </div>
 
-          {isEditing ? (
-  <div className="mb-3">
-    <div className="d-flex justify-content-center">
-      <Button
-        size="sm"
-        className={BTN_CLASS}
-        style={BTN_STYLE}
-        variant={addSkillsOpen ? "secondary" : "outline-secondary"}
-        onClick={() => onToggleAddSkillsOpen(role)}
-        disabled={saving}
-        aria-expanded={addSkillsOpen}
-        aria-controls={`add-skills-panel-${role}`}
-      >
-        {addSkillsOpen ? "Hide" : "Add Skills"}
-      </Button>
-    </div>
+        {isEditing ? (
+          <div className="mb-3">
+            <div className="d-flex justify-content-center">
+              <Button
+                size="sm"
+                className={BTN_CLASS}
+                style={BTN_STYLE}
+                variant={addSkillsOpen ? "secondary" : "outline-secondary"}
+                onClick={() => onToggleAddSkillsOpen(role)}
+                disabled={saving}
+                aria-expanded={addSkillsOpen}
+                aria-controls={`add-skills-panel-${role}`}
+              >
+                {addSkillsOpen ? "Hide" : "Add Skills"}
+              </Button>
+            </div>
 
-    {addSkillsOpen ? (
-      <div
-        id={`add-skills-panel-${role}`}
-        className="border rounded-3 p-3 mt-3"
-        style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
-      >
-        <div className="d-flex align-items-center gap-2 mb-3">
-          <SectionKicker>{title} Skill Builder</SectionKicker>
-          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-        </div>
+            {addSkillsOpen ? (
+              <div
+                id={`add-skills-panel-${role}`}
+                className="border rounded-3 p-3 mt-3"
+                style={{ background: "#fcfcff", borderColor: "#e9ecef" }}
+              >
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <SectionKicker>{title} Skill Builder</SectionKicker>
+                  <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                </div>
+
+                <div className="mb-3">
+                  <div className="fw-semibold mb-2" style={{ fontSize: 13 }}>
+                    Search
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2">
+                    <Form.Control
+                      type="text"
+                      placeholder={`Search skills for ${title.toLowerCase()}…`}
+                      value={searchQuery}
+                      onChange={(e) => onSearchChange(role, e.target.value)}
+                      disabled={saving}
+                      style={{ borderRadius: 12 }}
+                    />
+                    <Button
+                      size="sm"
+                      className={BTN_CLASS}
+                      style={BTN_STYLE}
+                      variant="outline-secondary"
+                      onClick={() => onClearSearch(role)}
+                      disabled={saving || !searchQuery}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+
+                  <div className="form-text mt-1">Search by name, level, or category.</div>
+                </div>
+
+                <div
+                  className="border rounded-3 p-3"
+                  style={{
+                    background: "#fff",
+                    borderColor: "#e9ecef",
+                    minHeight: 180,
+                  }}
+                >
+                  {availableSkillsRaw.length === 0 ? (
+                    <p className="text-muted mb-0">No more skills available to add.</p>
+                  ) : levels.length === 0 ? (
+                    <p className="text-muted mb-0">
+                      {searchQuery ? "No matches for that search." : "No skills available to add."}
+                    </p>
+                  ) : (
+                    <div
+                      style={{
+                        maxHeight: 280,
+                        overflowY: "auto",
+                        paddingRight: 4,
+                      }}
+                    >
+                      {levels.map((lvl) => (
+                        <div key={`${role}-level-${lvl}`} className="mb-3">
+                          <div className="fw-semibold mb-2">Basic {lvl}</div>
+
+                          {sortSkills(availableByLevel[lvl]).map((skill) => (
+                            <div
+                              key={`${role}-available-${skill.id}`}
+                              className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2 mb-2"
+                              style={{
+                                background: "#fff",
+                                borderColor: "#e9ecef",
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 14, lineHeight: 1.35 }}>
+                                  <strong>Basic {skill.level}</strong> — {skill.name}
+                                </div>
+                              </div>
+
+                              <Button
+                                size="sm"
+                                className={`${BTN_CLASS} flex-shrink-0`}
+                                style={BTN_STYLE}
+                                variant="outline-primary"
+                                onClick={() => onToggleAddSkill(role, skill)}
+                                disabled={saving}
+                              >
+                                Add
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mb-3">
-          <div className="fw-semibold mb-2" style={{ fontSize: 13 }}>
-            Search
+          <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
+            Skills
           </div>
 
-          <div className="d-flex align-items-center gap-2">
-            <Form.Control
-              type="text"
-              placeholder={`Search skills for ${title.toLowerCase()}…`}
-              value={searchQuery}
-              onChange={(e) => onSearchChange(role, e.target.value)}
-              disabled={saving}
-              style={{ borderRadius: 12 }}
-            />
-            <Button
-              size="sm"
-              className={BTN_CLASS}
-              style={BTN_STYLE}
-              variant="outline-secondary"
-              onClick={() => onClearSearch(role)}
-              disabled={saving || !searchQuery}
-            >
-              Clear
-            </Button>
-          </div>
+          {!isEditing ? (
+            skills.length === 0 ? (
+              <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
+            ) : (
+              <div className="d-grid" style={{ gap: 8 }}>
+                {sortSkills(skills).map((skill) => {
+                  const checked = taughtIds.has(skill.id);
 
-          <div className="form-text mt-1">Search by name, level, or category.</div>
-        </div>
-
-        <div
-          className="border rounded-3 p-3"
-          style={{
-            background: "#fff",
-            borderColor: "#e9ecef",
-            minHeight: 180,
-          }}
-        >
-          {availableSkillsRaw.length === 0 ? (
-            <p className="text-muted mb-0">No more skills available to add.</p>
-          ) : levels.length === 0 ? (
-            <p className="text-muted mb-0">
-              {searchQuery ? "No matches for that search." : "No skills available to add."}
-            </p>
+                  return (
+                    <div
+                      key={`${role}-view-${skill.id}`}
+                      className="border rounded-3 px-3 py-2"
+                      style={{
+                        background: checked ? "#f4f6f8" : "#fff",
+                        borderColor: checked ? "#d6dde3" : "#e9ecef",
+                        transition: "background-color 0.15s ease, border-color 0.15s ease",
+                      }}
+                    >
+                      <Form.Check
+                        type="checkbox"
+                        id={`${role}-taught-${skill.id}`}
+                        checked={checked}
+                        onChange={() => onToggleTaught(role, skill.id)}
+                        label={
+                          <span
+                            style={{
+                              fontSize: 14,
+                              textDecoration: checked ? "line-through" : "none",
+                              opacity: checked ? 0.68 : 1,
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <strong>Basic {skill.level}</strong> — {skill.name}
+                          </span>
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )
           ) : (
-            <div
-              style={{
-                maxHeight: 280,
-                overflowY: "auto",
-                paddingRight: 4,
-              }}
-            >
-              {levels.map((lvl) => (
-                <div key={`${role}-level-${lvl}`} className="mb-3">
-                  <div className="fw-semibold mb-2">Basic {lvl}</div>
-
-                  {sortSkills(availableByLevel[lvl]).map((skill) => (
-  <div
-  key={`${role}-available-${skill.id}`}
-  className="border rounded-3 px-3 py-2 d-flex justify-content-between align-items-start gap-2 mb-2"
-  style={{
-    background: "#fff",
-    borderColor: "#e9ecef",
-  }}
->
-  <div style={{ minWidth: 0 }}>
-    <div style={{ fontSize: 14, lineHeight: 1.35 }}>
-      <strong>Basic {skill.level}</strong> — {skill.name}
-    </div>
-  </div>
-
-  <Button
-    size="sm"
-    className={`${BTN_CLASS} flex-shrink-0`}
-    style={BTN_STYLE}
-    variant="outline-primary"
-    onClick={() => onToggleAddSkill(role, skill)}
-    disabled={saving}
-  >
-    Add
-  </Button>
-</div>
-))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-      
-      </div>
-    ) : null}
-  </div>
-) : null}
-
-          
-          <div className="mb-3">
-  <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
-    Skills
-  </div>
-
-  {!isEditing ? (
-    skills.length === 0 ? (
-      <SectionEmpty>No {title.toLowerCase()} skills added yet.</SectionEmpty>
-    ) : (
-      <div className="d-grid" style={{ gap: 8 }}>
-        {sortSkills(skills).map((skill) => {
-          const checked = taughtIds.has(skill.id);
-
-          return (
-            <div
-              key={`${role}-view-${skill.id}`}
-              className="border rounded-3 px-3 py-2"
-              style={{
-                background: checked ? "#f4f6f8" : "#fff",
-                borderColor: checked ? "#d6dde3" : "#e9ecef",
-                transition: "background-color 0.15s ease, border-color 0.15s ease",
-              }}
-            >
-              <Form.Check
-                type="checkbox"
-                id={`${role}-taught-${skill.id}`}
-                checked={checked}
-                onChange={() => onToggleTaught(role, skill.id)}
-                label={
-                  <span
+            <DroppableSkillArea role={role} isEmpty={skills.length === 0}>
+              <SortableContext
+                items={skills.map((skill) => `${role}:${skill.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                {skills.length > 0 ? (
+                  <div className="d-grid mb-3" style={{ gap: 8, touchAction: "pan-y" }}>
+                    {skills.map((skill) => (
+                      <DraggableSkillRow
+                        key={`${role}-edit-${skill.id}`}
+                        skill={skill}
+                        role={role}
+                        removable
+                        disabled={saving}
+                        isNew={!originalSkillIds.has(skill.id)}
+                        onRemove={() => onRemoveSkill(role, skill.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    className="border rounded-3 px-3 py-4 text-center text-muted"
                     style={{
+                      background: "#fbfbfd",
+                      borderColor: "#e9ecef",
                       fontSize: 14,
-                      textDecoration: checked ? "line-through" : "none",
-                      opacity: checked ? 0.68 : 1,
-                      transition: "all 0.15s ease",
                     }}
                   >
-                    <strong>Basic {skill.level}</strong> — {skill.name}
-                  </span>
-                }
-              />
-            </div>
-          );
-        })}
-      </div>
-    )
-  ) : (
-    <DroppableSkillArea role={role} isEmpty={skills.length === 0}>
-      <SortableContext
-        items={skills.map((skill) => `${role}:${skill.id}`)}
-        strategy={verticalListSortingStrategy}
-      >
-        {skills.length > 0 ? (
-          <div className="d-grid mb-3" style={{ gap: 8, touchAction: "pan-y" }}>
-            {skills.map((skill) => (
-              <DraggableSkillRow
-                key={`${role}-edit-${skill.id}`}
-                skill={skill}
-                role={role}
-                removable
-                disabled={saving}
-                isNew={!originalSkillIds.has(skill.id)}
-                onRemove={() => onRemoveSkill(role, skill.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div
-            className="border rounded-3 px-3 py-4 text-center text-muted"
-            style={{
-              background: "#fbfbfd",
-              borderColor: "#e9ecef",
-              fontSize: 14,
-            }}
-          >
-            Drop skills here
-          </div>
-        )}
-      </SortableContext>
-    </DroppableSkillArea>
-  )}
-</div>
-          
+                    Drop skills here
+                  </div>
+                )}
+              </SortableContext>
+            </DroppableSkillArea>
+          )}
+        </div>
 
         <div>
           <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
@@ -797,22 +796,22 @@ function SkillDnDWrapper({
   activeSkill,
   disabled = false,
 }) {
- const sensors = useSensors(
-  useSensor(PointerSensor, {
-    activationConstraint: {
-      distance: 8,
-    },
-  }),
-  useSensor(TouchSensor, {
-    activationConstraint: {
-      delay: 150,
-      tolerance: 12,
-    },
-  }),
-  useSensor(KeyboardSensor, {
-    coordinateGetter: sortableKeyboardCoordinates,
-  })
-);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150,
+        tolerance: 12,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   return (
     <DndContext
@@ -902,11 +901,19 @@ class LessonPlanShow extends Component {
 
     showUnsavedModal: false,
     pendingNavigation: null,
+
+    allRosters: [],
+    schedulerRosterId: this.props?.rosterId || "",
+    schedulerMode: "roster",
+    rosterUpcomingSlots: [],
+    rosterSlotsLoading: false,
+    rosterSlotsError: null,
   };
 
   componentDidMount() {
     this.loadPage();
     this.loadWeeklyOverview();
+    this.loadRostersForScheduler();
     window.addEventListener("beforeunload", this.handleBeforeUnload);
   }
 
@@ -943,151 +950,151 @@ class LessonPlanShow extends Component {
     return null;
   };
 
-handleDragEnd = ({ active, over }) => {
-  const activeId = String(active.id);
+  handleDragEnd = ({ active, over }) => {
+    const activeId = String(active.id);
 
-  if (!over) {
-    this.setState({ activeDragSkill: null });
-    return;
-  }
-
-  const overId = String(over.id);
-
-  const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
-  const overRole = this.findRoleFromOver(over);
-
-  if (!activeRole || !overRole) {
-    this.setState({ activeDragSkill: null });
-    return;
-  }
-
-  if (activeRole === overRole && activeId !== overId) {
-    this.setState((prev) => {
-      const items = [...(prev.draftSkillsByRole[activeRole] || [])];
-      const oldIndex = this.findSkillIndex(items, activeRole, activeId);
-      const rawNewIndex =
-  Object.values(ROLE).includes(overId)
-    ? items.length
-    : this.findSkillIndex(items, overRole, overId);
-
-if (oldIndex === -1 || rawNewIndex === -1 || oldIndex === rawNewIndex) {
-  return { activeDragSkill: null };
-}
-
-const [moved] = items.splice(oldIndex, 1);
-const safeNewIndex = Math.max(0, Math.min(rawNewIndex, items.length));
-items.splice(safeNewIndex, 0, moved);
-
-      return {
-        draftSkillsByRole: {
-          ...prev.draftSkillsByRole,
-          [activeRole]: items,
-        },
-        success: null,
-        error: null,
-        activeDragSkill: null,
-      };
-    });
-    return;
-  }
-
-  this.setState({ activeDragSkill: null });
-};
-
-handleDragOver = ({ active, over }) => {
-  if (!over) return;
-
-  const activeId = String(active.id);
-  const overId = String(over.id);
-
-  const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
-  const overRole = this.findRoleFromOver(over);
-
-  if (!activeRole || !overRole) return;
-  if (activeRole === overRole) return;
-
-  this.setState((prev) => {
-    const nextByRole = {
-      ...prev.draftSkillsByRole,
-      main: [...(prev.draftSkillsByRole.main || [])],
-      warmup: [...(prev.draftSkillsByRole.warmup || [])],
-      cooldown: [...(prev.draftSkillsByRole.cooldown || [])],
-    };
-
-    const sourceItems = nextByRole[activeRole];
-    const targetItems = nextByRole[overRole];
-
-    const sourceIndex = this.findSkillIndex(sourceItems, activeRole, activeId);
-    if (sourceIndex === -1) return null;
-
-    const existingTargetIndex = this.findSkillIndex(targetItems, overRole, activeId);
-    if (existingTargetIndex !== -1) return null;
-
-    const [movedSkill] = sourceItems.splice(sourceIndex, 1);
-
-    const targetIndex = Object.values(ROLE).includes(overId)
-      ? targetItems.length
-      : this.findSkillIndex(targetItems, overRole, overId);
-
-    if (targetIndex < 0) {
-      targetItems.push(movedSkill);
-    } else {
-      targetItems.splice(targetIndex, 0, movedSkill);
+    if (!over) {
+      this.setState({ activeDragSkill: null });
+      return;
     }
 
-    return {
-      draftSkillsByRole: nextByRole,
-      success: null,
-      error: null,
-    };
-  });
-};
+    const overId = String(over.id);
 
-getRoleItems = (draftSkillsByRole, role) => [...(draftSkillsByRole[role] || [])];
+    const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+    const overRole = this.findRoleFromOver(over);
 
-findSkillIndex = (items, role, id) =>
-  items.findIndex((skill) => `${role}:${skill.id}` === id);
+    if (!activeRole || !overRole) {
+      this.setState({ activeDragSkill: null });
+      return;
+    }
 
-findRoleFromOver = (over) => {
-  if (!over) return null;
+    if (activeRole === overRole && activeId !== overId) {
+      this.setState((prev) => {
+        const items = [...(prev.draftSkillsByRole[activeRole] || [])];
+        const oldIndex = this.findSkillIndex(items, activeRole, activeId);
+        const rawNewIndex =
+          Object.values(ROLE).includes(overId)
+            ? items.length
+            : this.findSkillIndex(items, overRole, overId);
 
-  const overId = String(over.id);
+        if (oldIndex === -1 || rawNewIndex === -1 || oldIndex === rawNewIndex) {
+          return { activeDragSkill: null };
+        }
 
-  if (Object.values(ROLE).includes(overId)) return overId;
+        const [moved] = items.splice(oldIndex, 1);
+        const safeNewIndex = Math.max(0, Math.min(rawNewIndex, items.length));
+        items.splice(safeNewIndex, 0, moved);
 
-  if (over.data?.current?.role) return over.data.current.role;
+        return {
+          draftSkillsByRole: {
+            ...prev.draftSkillsByRole,
+            [activeRole]: items,
+          },
+          success: null,
+          error: null,
+          activeDragSkill: null,
+        };
+      });
+      return;
+    }
 
-  return this.findSkillContainer(overId);
-};
+    this.setState({ activeDragSkill: null });
+  };
 
-handleDragStart = ({ active }) => {
-  const activeId = String(active.id);
-  const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+  handleDragOver = ({ active, over }) => {
+    if (!over) return;
 
-  if (!activeRole) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
 
-  const items = this.state.draftSkillsByRole[activeRole] || [];
-  const skill = items.find((s) => `${activeRole}:${s.id}` === activeId);
+    const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+    const overRole = this.findRoleFromOver(over);
 
-  if (!skill) return;
+    if (!activeRole || !overRole) return;
+    if (activeRole === overRole) return;
 
-  const originalSkills =
-    activeRole === ROLE.MAIN
-      ? this.state.lessonPlan?.main_skills || this.state.lessonPlan?.skills || []
-      : activeRole === ROLE.WARMUP
-      ? this.state.lessonPlan?.warmup_skills || []
-      : this.state.lessonPlan?.cooldown_skills || [];
+    this.setState((prev) => {
+      const nextByRole = {
+        ...prev.draftSkillsByRole,
+        main: [...(prev.draftSkillsByRole.main || [])],
+        warmup: [...(prev.draftSkillsByRole.warmup || [])],
+        cooldown: [...(prev.draftSkillsByRole.cooldown || [])],
+      };
 
-  const originalSkillIds = new Set(originalSkills.map((s) => s.id));
+      const sourceItems = nextByRole[activeRole];
+      const targetItems = nextByRole[overRole];
 
-  this.setState({
-    activeDragSkill: {
-      role: activeRole,
-      skill,
-      isNew: !originalSkillIds.has(skill.id),
-    },
-  });
-};
+      const sourceIndex = this.findSkillIndex(sourceItems, activeRole, activeId);
+      if (sourceIndex === -1) return null;
+
+      const existingTargetIndex = this.findSkillIndex(targetItems, overRole, activeId);
+      if (existingTargetIndex !== -1) return null;
+
+      const [movedSkill] = sourceItems.splice(sourceIndex, 1);
+
+      const targetIndex = Object.values(ROLE).includes(overId)
+        ? targetItems.length
+        : this.findSkillIndex(targetItems, overRole, overId);
+
+      if (targetIndex < 0) {
+        targetItems.push(movedSkill);
+      } else {
+        targetItems.splice(targetIndex, 0, movedSkill);
+      }
+
+      return {
+        draftSkillsByRole: nextByRole,
+        success: null,
+        error: null,
+      };
+    });
+  };
+
+  getRoleItems = (draftSkillsByRole, role) => [...(draftSkillsByRole[role] || [])];
+
+  findSkillIndex = (items, role, id) =>
+    items.findIndex((skill) => `${role}:${skill.id}` === id);
+
+  findRoleFromOver = (over) => {
+    if (!over) return null;
+
+    const overId = String(over.id);
+
+    if (Object.values(ROLE).includes(overId)) return overId;
+
+    if (over.data?.current?.role) return over.data.current.role;
+
+    return this.findSkillContainer(overId);
+  };
+
+  handleDragStart = ({ active }) => {
+    const activeId = String(active.id);
+    const activeRole = active.data?.current?.role || this.findSkillContainer(activeId);
+
+    if (!activeRole) return;
+
+    const items = this.state.draftSkillsByRole[activeRole] || [];
+    const skill = items.find((s) => `${activeRole}:${s.id}` === activeId);
+
+    if (!skill) return;
+
+    const originalSkills =
+      activeRole === ROLE.MAIN
+        ? this.state.lessonPlan?.main_skills || this.state.lessonPlan?.skills || []
+        : activeRole === ROLE.WARMUP
+        ? this.state.lessonPlan?.warmup_skills || []
+        : this.state.lessonPlan?.cooldown_skills || [];
+
+    const originalSkillIds = new Set(originalSkills.map((s) => s.id));
+
+    this.setState({
+      activeDragSkill: {
+        role: activeRole,
+        skill,
+        isNew: !originalSkillIds.has(skill.id),
+      },
+    });
+  };
 
   hasUnsavedChanges = () => {
     const { lessonPlan, isEditing } = this.state;
@@ -1109,8 +1116,8 @@ handleDragStart = ({ active }) => {
     );
 
     const mainSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.main, originalMain);
-const warmupSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.warmup, originalWarmup);
-const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cooldown, originalCooldown);
+    const warmupSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.warmup, originalWarmup);
+    const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cooldown, originalCooldown);
 
     return (
       titleChanged ||
@@ -1219,6 +1226,7 @@ const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cool
           cooldownNotes: lp.cooldown_notes || "",
           draftSkillsByRole: this.buildDraftSkillsFromLessonPlan(lp),
           draftOccurrences: this.buildDraftOccurrencesFromLessonPlan(lp),
+          schedulerRosterId: this.props.rosterId || this.state.schedulerRosterId || "",
           loading: false,
           saving: false,
         });
@@ -1230,6 +1238,123 @@ const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cool
           saving: false,
         });
       });
+  };
+
+  loadRostersForScheduler = async () => {
+    this.setState({ rosterSlotsLoading: true, rosterSlotsError: null });
+
+    try {
+      const res = await api.get("/rosters");
+      const rosters = coerceArray(res.data);
+
+      const initialRosterId =
+        this.props.rosterId ||
+        (rosters.length === 1 ? String(rosters[0].id) : "");
+
+      this.setState(
+        {
+          allRosters: rosters,
+          schedulerRosterId: initialRosterId ? String(initialRosterId) : "",
+          rosterSlotsLoading: false,
+        },
+        () => {
+          if (this.state.schedulerRosterId) {
+            this.loadUpcomingSlotsForRoster(this.state.schedulerRosterId);
+          } else {
+            this.setState({ rosterUpcomingSlots: [] });
+          }
+        }
+      );
+    } catch (err) {
+      this.setState({
+        rosterSlotsLoading: false,
+        rosterSlotsError: safeMessage(err, "Failed to load rosters"),
+      });
+    }
+  };
+
+  loadUpcomingSlotsForRoster = async (rosterId) => {
+    if (!rosterId) {
+      this.setState({ rosterUpcomingSlots: [], rosterSlotsError: null });
+      return;
+    }
+
+    this.setState({ rosterSlotsLoading: true, rosterSlotsError: null });
+
+    try {
+      const res = await api.get(`/rosters/${rosterId}/upcoming_slots`, {
+        params: { days: 45 },
+      });
+
+      this.setState({
+        rosterUpcomingSlots: Array.isArray(res.data?.slots) ? res.data.slots : [],
+        rosterSlotsLoading: false,
+      });
+    } catch (err) {
+      this.setState({
+        rosterUpcomingSlots: [],
+        rosterSlotsLoading: false,
+        rosterSlotsError: safeMessage(err, "Failed to load upcoming slots"),
+      });
+    }
+  };
+
+  handleSchedulerRosterChange = (e) => {
+    const rosterId = e.target.value;
+
+    this.setState(
+      {
+        schedulerRosterId: rosterId,
+        rosterUpcomingSlots: [],
+        rosterSlotsError: null,
+      },
+      () => {
+        if (rosterId) this.loadUpcomingSlotsForRoster(rosterId);
+      }
+    );
+  };
+
+  addOccurrenceFromSlot = (slot) => {
+    if (!slot?.taught_on) return;
+
+    const draftOccurrence = {
+      id: makeTempOccurrenceId(),
+      taught_on: slot.taught_on,
+      starts_at: slot.starts_at || null,
+      ends_at: slot.ends_at || null,
+      location: slot.location || null,
+      roster_id: this.state.schedulerRosterId || null,
+      _isNew: true,
+    };
+
+    const alreadyExists = (this.state.draftOccurrences || []).some((occ) => {
+      return (
+        occ.taught_on === draftOccurrence.taught_on &&
+        String(occ.starts_at || "") === String(draftOccurrence.starts_at || "") &&
+        String(occ.ends_at || "") === String(draftOccurrence.ends_at || "") &&
+        String(occ.roster_id || "") === String(draftOccurrence.roster_id || "")
+      );
+    });
+
+    if (alreadyExists) {
+      this.setState({
+        error: "That class time is already on this lesson plan.",
+        success: null,
+      });
+      return;
+    }
+
+    this.setState((prev) => ({
+      draftOccurrences: [...prev.draftOccurrences, draftOccurrence],
+      success: "Added to schedule. Save changes to keep it.",
+      error: null,
+    }));
+  };
+
+  selectedSchedulerRoster = () => {
+    return (this.state.allRosters || []).find(
+      (r) => String(r.id) === String(this.state.schedulerRosterId)
+    ) || null;
   };
 
   startEdit = () => {
@@ -1381,15 +1506,15 @@ const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cool
     };
 
     const removedByRole = {
-      main: [...originalIds.main].filter((id) => !draftIds.main.has(id)),
-      warmup: [...originalIds.warmup].filter((id) => !draftIds.warmup.has(id)),
-      cooldown: [...originalIds.cooldown].filter((id) => !draftIds.cooldown.has(id)),
+      main: [...originalIds.main].filter((sid) => !draftIds.main.has(sid)),
+      warmup: [...originalIds.warmup].filter((sid) => !draftIds.warmup.has(sid)),
+      cooldown: [...originalIds.cooldown].filter((sid) => !draftIds.cooldown.has(sid)),
     };
 
     const addedByRole = {
-      main: [...draftIds.main].filter((id) => !originalIds.main.has(id)),
-      warmup: [...draftIds.warmup].filter((id) => !originalIds.warmup.has(id)),
-      cooldown: [...draftIds.cooldown].filter((id) => !originalIds.cooldown.has(id)),
+      main: [...draftIds.main].filter((sid) => !originalIds.main.has(sid)),
+      warmup: [...draftIds.warmup].filter((sid) => !originalIds.warmup.has(sid)),
+      cooldown: [...draftIds.cooldown].filter((sid) => !originalIds.cooldown.has(sid)),
     };
 
     const originalOccurrences = this.buildDraftOccurrencesFromLessonPlan(lessonPlan);
@@ -1408,7 +1533,7 @@ const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cool
     );
 
     const removedOccurrenceIds = [...originalOccurrenceIds].filter(
-      (id) => !keptPersistedOccurrenceIds.has(id)
+      (occId) => !keptPersistedOccurrenceIds.has(occId)
     );
 
     const newOccurrences = draftOccurrences.filter(
@@ -1416,42 +1541,42 @@ const cooldownSkillsChanged = !skillOrderEqual(this.state.draftSkillsByRole.cool
     );
 
     const dedupeSkills = (arr) => {
-  const seen = new Set();
-  return (arr || []).filter((skill) => {
-    if (seen.has(skill.id)) return false;
-    seen.add(skill.id);
-    return true;
-  });
-};
+      const seen = new Set();
+      return (arr || []).filter((skill) => {
+        if (seen.has(skill.id)) return false;
+        seen.add(skill.id);
+        return true;
+      });
+    };
 
-const orderedSkillsByRole = {
-  main: dedupeSkills(draftSkillsByRole.main).map((s, index) => ({
-    skill_id: s.id,
-    role: "main",
-    position: index,
-  })),
-  warmup: dedupeSkills(draftSkillsByRole.warmup).map((s, index) => ({
-    skill_id: s.id,
-    role: "warmup",
-    position: index,
-  })),
-  cooldown: dedupeSkills(draftSkillsByRole.cooldown).map((s, index) => ({
-    skill_id: s.id,
-    role: "cooldown",
-    position: index,
-  })),
-};
+    const orderedSkillsByRole = {
+      main: dedupeSkills(draftSkillsByRole.main).map((s, index) => ({
+        skill_id: s.id,
+        role: "main",
+        position: index,
+      })),
+      warmup: dedupeSkills(draftSkillsByRole.warmup).map((s, index) => ({
+        skill_id: s.id,
+        role: "warmup",
+        position: index,
+      })),
+      cooldown: dedupeSkills(draftSkillsByRole.cooldown).map((s, index) => ({
+        skill_id: s.id,
+        role: "cooldown",
+        position: index,
+      })),
+    };
 
-const payload = {
-  lesson_plan: {
-    title: (title || "").trim(),
-    description: (description || "").trim(),
-    warmup_notes: (warmupNotes ?? "").trim() || null,
-    main_notes: (mainNotes ?? "").trim() || null,
-    cooldown_notes: (cooldownNotes ?? "").trim() || null,
-    ordered_skills_by_role: orderedSkillsByRole,
-  },
-};
+    const payload = {
+      lesson_plan: {
+        title: (title || "").trim(),
+        description: (description || "").trim(),
+        warmup_notes: (warmupNotes ?? "").trim() || null,
+        main_notes: (mainNotes ?? "").trim() || null,
+        cooldown_notes: (cooldownNotes ?? "").trim() || null,
+        ordered_skills_by_role: orderedSkillsByRole,
+      },
+    };
 
     this.setState({
       saving: true,
@@ -1463,35 +1588,35 @@ const payload = {
 
     try {
       for (const skillId of removedByRole.main) {
-  await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "main" } });
-}
-for (const skillId of removedByRole.warmup) {
-  await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "warmup" } });
-}
-for (const skillId of removedByRole.cooldown) {
-  await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "cooldown" } });
-}
+        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "main" } });
+      }
+      for (const skillId of removedByRole.warmup) {
+        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "warmup" } });
+      }
+      for (const skillId of removedByRole.cooldown) {
+        await api.delete(`/lesson_plans/${id}/remove_skill/${skillId}`, { params: { role: "cooldown" } });
+      }
 
-if (addedByRole.main.length) {
-  await api.post(`/lesson_plans/${id}/add_skills`, {
-    skill_ids: addedByRole.main,
-    role: "main",
-  });
-}
-if (addedByRole.warmup.length) {
-  await api.post(`/lesson_plans/${id}/add_skills`, {
-    skill_ids: addedByRole.warmup,
-    role: "warmup",
-  });
-}
-if (addedByRole.cooldown.length) {
-  await api.post(`/lesson_plans/${id}/add_skills`, {
-    skill_ids: addedByRole.cooldown,
-    role: "cooldown",
-  });
-}
+      if (addedByRole.main.length) {
+        await api.post(`/lesson_plans/${id}/add_skills`, {
+          skill_ids: addedByRole.main,
+          role: "main",
+        });
+      }
+      if (addedByRole.warmup.length) {
+        await api.post(`/lesson_plans/${id}/add_skills`, {
+          skill_ids: addedByRole.warmup,
+          role: "warmup",
+        });
+      }
+      if (addedByRole.cooldown.length) {
+        await api.post(`/lesson_plans/${id}/add_skills`, {
+          skill_ids: addedByRole.cooldown,
+          role: "cooldown",
+        });
+      }
 
-await api.patch(`/lesson_plans/${id}`, payload);
+      await api.patch(`/lesson_plans/${id}`, payload);
 
       for (const occurrenceId of removedOccurrenceIds) {
         await api.delete(`/lesson_plans/${id}/lesson_plan_occurrences/${occurrenceId}`);
@@ -1504,6 +1629,7 @@ await api.patch(`/lesson_plans/${id}`, payload);
             starts_at: occ.starts_at || null,
             ends_at: occ.ends_at || null,
             location: occ.location || null,
+            roster_id: occ.roster_id || null,
           },
         });
       }
@@ -1559,20 +1685,20 @@ await api.patch(`/lesson_plans/${id}`, payload);
   };
 
   toggleAddSkill = (role, skill) => {
-  this.setState((prev) => {
-    const current = prev.draftSkillsByRole[role] || [];
-    const exists = current.some((s) => s.id === skill.id);
+    this.setState((prev) => {
+      const current = prev.draftSkillsByRole[role] || [];
+      const exists = current.some((s) => s.id === skill.id);
 
-    return {
-      draftSkillsByRole: {
-        ...prev.draftSkillsByRole,
-        [role]: exists ? current : [...current, skill],
-      },
-      success: null,
-      error: null,
-    };
-  });
-};
+      return {
+        draftSkillsByRole: {
+          ...prev.draftSkillsByRole,
+          [role]: exists ? current : [...current, skill],
+        },
+        success: null,
+        error: null,
+      };
+    });
+  };
 
   clearAddedSelections = (role, availableSkills) => {
     const availableIds = new Set((availableSkills || []).map((s) => s.id));
@@ -1616,6 +1742,7 @@ await api.patch(`/lesson_plans/${id}`, payload);
       starts_at: newStartsAt || null,
       ends_at: newEndsAt || null,
       location: newLocation.trim() || null,
+      roster_id: null,
       _isNew: true,
     };
 
@@ -1658,6 +1785,13 @@ await api.patch(`/lesson_plans/${id}`, payload);
   };
 
   getMatchingWeeklyRostersForOccurrence = (occ) => {
+    const directRoster =
+      occ?.roster_id != null
+        ? (this.state.allRosters || []).find((r) => String(r.id) === String(occ.roster_id))
+        : null;
+
+    if (directRoster) return [directRoster];
+
     const wd = localWeekdayFromYmd(occ?.taught_on);
     if (wd == null) return [];
 
@@ -1797,6 +1931,7 @@ await api.patch(`/lesson_plans/${id}`, payload);
     const draftOccurrences = this.state.draftOccurrences || [];
 
     const hasUnsaved = this.hasUnsavedChanges();
+    const selectedSchedulerRoster = this.selectedSchedulerRoster();
 
     const tocItems = [
       { id: "lesson-overview", label: "Overview" },
@@ -2140,81 +2275,81 @@ await api.patch(`/lesson_plans/${id}`, payload);
           </div>
 
           <SkillDnDWrapper
-  onDragStart={this.handleDragStart}
-  onDragOver={this.handleDragOver}
-  onDragEnd={this.handleDragEnd}
-  activeSkill={this.state.activeDragSkill}
-  disabled={!isEditing || saving}
->
-  <div id="section-warmup" tabIndex="-1">
-    <LessonSectionCard
-      title="Warm-up"
-      role={ROLE.WARMUP}
-      skills={warmupSkills}
-      notes={this.state.warmupNotes}
-      isEditing={isEditing}
-      saving={saving}
-      onNotesChange={(value) => this.setState({ warmupNotes: value })}
-      onRemoveSkill={this.removeSkill}
-      taughtIds={taughtSkillIdsByRole.warmup}
-      onToggleTaught={this.toggleTaught}
-      allSkills={skills}
-      addSkillsOpen={addSkillsOpenByRole.warmup}
-      searchQuery={skillSearchByRole.warmup}
-      onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
-      onSearchChange={this.changeSkillSearch}
-      onClearSearch={this.clearSkillSearch}
-      onToggleAddSkill={this.toggleAddSkill}
-      originalSkillIds={new Set(originalWarmupSkills.map((s) => s.id))}
-    />
-  </div>
+            onDragStart={this.handleDragStart}
+            onDragOver={this.handleDragOver}
+            onDragEnd={this.handleDragEnd}
+            activeSkill={this.state.activeDragSkill}
+            disabled={!isEditing || saving}
+          >
+            <div id="section-warmup" tabIndex="-1">
+              <LessonSectionCard
+                title="Warm-up"
+                role={ROLE.WARMUP}
+                skills={warmupSkills}
+                notes={this.state.warmupNotes}
+                isEditing={isEditing}
+                saving={saving}
+                onNotesChange={(value) => this.setState({ warmupNotes: value })}
+                onRemoveSkill={this.removeSkill}
+                taughtIds={taughtSkillIdsByRole.warmup}
+                onToggleTaught={this.toggleTaught}
+                allSkills={skills}
+                addSkillsOpen={addSkillsOpenByRole.warmup}
+                searchQuery={skillSearchByRole.warmup}
+                onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+                onSearchChange={this.changeSkillSearch}
+                onClearSearch={this.clearSkillSearch}
+                onToggleAddSkill={this.toggleAddSkill}
+                originalSkillIds={new Set(originalWarmupSkills.map((s) => s.id))}
+              />
+            </div>
 
-  <div id="section-main" tabIndex="-1">
-    <LessonSectionCard
-      title="Main Lesson"
-      role={ROLE.MAIN}
-      skills={mainSkills}
-      notes={this.state.mainNotes}
-      isEditing={isEditing}
-      saving={saving}
-      onNotesChange={(value) => this.setState({ mainNotes: value })}
-      onRemoveSkill={this.removeSkill}
-      taughtIds={taughtSkillIdsByRole.main}
-      onToggleTaught={this.toggleTaught}
-      allSkills={skills}
-      addSkillsOpen={addSkillsOpenByRole.main}
-      searchQuery={skillSearchByRole.main}
-      onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
-      onSearchChange={this.changeSkillSearch}
-      onClearSearch={this.clearSkillSearch}
-      onToggleAddSkill={this.toggleAddSkill}
-      originalSkillIds={new Set(originalMainSkills.map((s) => s.id))}
-    />
-  </div>
+            <div id="section-main" tabIndex="-1">
+              <LessonSectionCard
+                title="Main Lesson"
+                role={ROLE.MAIN}
+                skills={mainSkills}
+                notes={this.state.mainNotes}
+                isEditing={isEditing}
+                saving={saving}
+                onNotesChange={(value) => this.setState({ mainNotes: value })}
+                onRemoveSkill={this.removeSkill}
+                taughtIds={taughtSkillIdsByRole.main}
+                onToggleTaught={this.toggleTaught}
+                allSkills={skills}
+                addSkillsOpen={addSkillsOpenByRole.main}
+                searchQuery={skillSearchByRole.main}
+                onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+                onSearchChange={this.changeSkillSearch}
+                onClearSearch={this.clearSkillSearch}
+                onToggleAddSkill={this.toggleAddSkill}
+                originalSkillIds={new Set(originalMainSkills.map((s) => s.id))}
+              />
+            </div>
 
-  <div id="section-cooldown" tabIndex="-1">
-    <LessonSectionCard
-      title="Cool-down"
-      role={ROLE.COOLDOWN}
-      skills={cooldownSkills}
-      notes={this.state.cooldownNotes}
-      isEditing={isEditing}
-      saving={saving}
-      onNotesChange={(value) => this.setState({ cooldownNotes: value })}
-      onRemoveSkill={this.removeSkill}
-      taughtIds={taughtSkillIdsByRole.cooldown}
-      onToggleTaught={this.toggleTaught}
-      allSkills={skills}
-      addSkillsOpen={addSkillsOpenByRole.cooldown}
-      searchQuery={skillSearchByRole.cooldown}
-      onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
-      onSearchChange={this.changeSkillSearch}
-      onClearSearch={this.clearSkillSearch}
-      onToggleAddSkill={this.toggleAddSkill}
-      originalSkillIds={new Set(originalCooldownSkills.map((s) => s.id))}
-    />
-  </div>
-</SkillDnDWrapper>
+            <div id="section-cooldown" tabIndex="-1">
+              <LessonSectionCard
+                title="Cool-down"
+                role={ROLE.COOLDOWN}
+                skills={cooldownSkills}
+                notes={this.state.cooldownNotes}
+                isEditing={isEditing}
+                saving={saving}
+                onNotesChange={(value) => this.setState({ cooldownNotes: value })}
+                onRemoveSkill={this.removeSkill}
+                taughtIds={taughtSkillIdsByRole.cooldown}
+                onToggleTaught={this.toggleTaught}
+                allSkills={skills}
+                addSkillsOpen={addSkillsOpenByRole.cooldown}
+                searchQuery={skillSearchByRole.cooldown}
+                onToggleAddSkillsOpen={this.toggleAddSkillsOpen}
+                onSearchChange={this.changeSkillSearch}
+                onClearSearch={this.clearSkillSearch}
+                onToggleAddSkill={this.toggleAddSkill}
+                originalSkillIds={new Set(originalCooldownSkills.map((s) => s.id))}
+              />
+            </div>
+          </SkillDnDWrapper>
 
           <div id="section-scheduler" tabIndex="-1" style={{ scrollMarginTop: 24 }}>
             {isEditing ? (
@@ -2230,105 +2365,23 @@ await api.patch(`/lesson_plans/${id}`, payload);
                 <Card className="mt-4 border-0 shadow-sm" style={{ borderRadius: 14 }}>
                   <Card.Body>
                     <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
-                      <Card.Title className="mb-0">Lesson Plan Scheduler</Card.Title>
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <SectionKicker>My weekly schedule</SectionKicker>
-                        <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
-                      </div>
-
-                      {this.state.weeklyOverviewError ? (
-                        <Alert variant="danger" className="mb-2">
-                          {this.state.weeklyOverviewError}
-                        </Alert>
-                      ) : null}
-
-                      {this.state.weeklyOverviewLoading ? (
+                      <div>
+                        <Card.Title className="mb-1">Lesson Plan Scheduler</Card.Title>
                         <div className="text-muted" style={{ fontSize: 13 }}>
-                          Loading weekly schedule…
+                          Add this lesson plan to an upcoming roster slot, or choose a custom date and time.
                         </div>
-                      ) : (
-                        <Row className="g-2">
-                          {Array.from({ length: 7 }).map((_, wd) => {
-                            const rows = (this.state.weeklyOverview || {})[wd] || [];
-                            return (
-                              <Col key={wd} xs={12} sm={6} md={3} lg>
-                                <div className="border rounded-3 p-2 h-100" style={{ background: "#fff" }}>
-                                  <div className="d-flex justify-content-between align-items-center">
-                                    <div
-                                      className="text-uppercase text-muted"
-                                      style={{ fontSize: 10, letterSpacing: 0.6 }}
-                                    >
-                                      {dayShort[wd]}
-                                    </div>
-                                    <span className="text-muted" style={{ fontSize: 12 }}>
-                                      {rows.length ? rows.length : ""}
-                                    </span>
-                                  </div>
-
-                                  {rows.length === 0 ? (
-                                    <div className="text-muted mt-2" style={{ fontSize: 12 }}>
-                                      —
-                                    </div>
-                                  ) : (
-                                    <div className="mt-2 d-flex flex-column" style={{ gap: 6 }}>
-                                      {rows.slice(0, 6).map(({ roster, schedule }) => {
-                                        const t = compactRange(schedule?.starts_at, schedule?.ends_at);
-                                        return (
-                                          <div
-                                            key={`${roster?.id}-${schedule?.id}`}
-                                            className="d-flex align-items-start justify-content-between"
-                                            style={{ gap: 8 }}
-                                          >
-                                            <div style={{ minWidth: 0 }}>
-                                              <div
-                                                className="fw-semibold"
-                                                style={{
-                                                  fontSize: 12,
-                                                  lineHeight: 1.15,
-                                                  whiteSpace: "nowrap",
-                                                  overflow: "hidden",
-                                                  textOverflow: "ellipsis",
-                                                }}
-                                                title={roster?.name || ""}
-                                              >
-                                                {roster?.name || "Roster"}
-                                              </div>
-
-                                              <div
-                                                className="text-muted"
-                                                style={{ fontSize: 11, lineHeight: 1.15 }}
-                                              >
-                                                {t || "time"}
-                                                {schedule?.location ? ` • ${schedule.location}` : ""}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-
-                                      {rows.length > 6 ? (
-                                        <div className="text-muted" style={{ fontSize: 11 }}>
-                                          +{rows.length - 6} more
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  )}
-                                </div>
-                              </Col>
-                            );
-                          })}
-                        </Row>
-                      )}
+                      </div>
                     </div>
 
-                    <hr className="my-3" />
+                    {this.state.rosterSlotsError ? (
+                      <Alert variant="danger" className="mt-3 mb-0">
+                        {this.state.rosterSlotsError}
+                      </Alert>
+                    ) : null}
 
-                    <div className="mt-3">
+                    <div className="mt-4">
                       <div className="d-flex align-items-center gap-2 mb-2">
-                        <SectionKicker>Lesson plan scheduled dates</SectionKicker>
+                        <SectionKicker>Scheduled dates</SectionKicker>
                         <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
                         <Badge bg="light" text="dark">
                           {draftOccurrences.length}
@@ -2450,96 +2503,217 @@ await api.patch(`/lesson_plans/${id}`, payload);
                       )}
                     </div>
 
-                    <hr className="my-3" />
+                    <hr className="my-4" />
 
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <SectionKicker>Add to schedule</SectionKicker>
-                      <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                    <div className="d-flex gap-2 flex-wrap mb-3">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className={BTN_CLASS}
+                        style={BTN_STYLE}
+                        variant={this.state.schedulerMode === "roster" ? "primary" : "outline-secondary"}
+                        onClick={() => this.setState({ schedulerMode: "roster" })}
+                      >
+                        Use roster schedule
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        className={BTN_CLASS}
+                        style={BTN_STYLE}
+                        variant={this.state.schedulerMode === "manual" ? "primary" : "outline-secondary"}
+                        onClick={() => this.setState({ schedulerMode: "manual" })}
+                      >
+                        Pick custom date/time
+                      </Button>
                     </div>
 
-                    <Form onSubmit={this.createOccurrence}>
-                      <Row className="g-2 align-items-end">
-                        <Col md={4}>
-                          <Form.Label>Date</Form.Label>
-                          <Form.Control
-                            type="date"
-                            name="newTaughtOn"
-                            value={this.state.newTaughtOn}
-                            onChange={this.handleOccFieldChange}
-                            required
-                            disabled={saving}
-                          />
-                        </Col>
+                    {this.state.schedulerMode === "roster" ? (
+                      <>
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <SectionKicker>Upcoming roster slots</SectionKicker>
+                          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                        </div>
 
-                        <Col md={3}>
-                          <Form.Label>Start</Form.Label>
-                          <Form.Control
-                            type="time"
-                            name="newStartsAt"
-                            value={this.state.newStartsAt}
-                            onChange={this.handleOccFieldChange}
-                            disabled={saving}
-                          />
-                        </Col>
+                        <Row className="g-2 align-items-end mb-3">
+                          <Col md={6}>
+                            <Form.Label>Roster</Form.Label>
+                            <Form.Select
+                              value={this.state.schedulerRosterId}
+                              onChange={this.handleSchedulerRosterChange}
+                              disabled={saving || this.state.rosterSlotsLoading}
+                              style={{ borderRadius: 12 }}
+                            >
+                              <option value="">Choose a roster…</option>
+                              {(this.state.allRosters || []).map((roster) => (
+                                <option key={roster.id} value={roster.id}>
+                                  {roster.name}
+                                </option>
+                              ))}
+                            </Form.Select>
+                          </Col>
 
-                        <Col md={3}>
-                          <Form.Label>End</Form.Label>
-                          <Form.Control
-                            type="time"
-                            name="newEndsAt"
-                            value={this.state.newEndsAt}
-                            onChange={this.handleOccFieldChange}
-                            disabled={saving}
-                          />
-                        </Col>
+                          {selectedSchedulerRoster ? (
+                            <Col md={6}>
+                              <div className="text-muted" style={{ fontSize: 12 }}>
+                                Scheduling for:
+                              </div>
+                              <div className="fw-semibold" style={{ fontSize: 14 }}>
+                                {selectedSchedulerRoster.name}
+                              </div>
+                            </Col>
+                          ) : null}
+                        </Row>
 
-                        <Col md={10}>
-                          <Form.Label>Location (optional)</Form.Label>
-                          <Form.Control
-                            type="text"
-                            name="newLocation"
-                            placeholder="e.g. Rink A"
-                            value={this.state.newLocation}
-                            onChange={this.handleOccFieldChange}
-                            disabled={saving}
-                          />
-                        </Col>
+                        {this.state.rosterSlotsLoading ? (
+                          <div className="py-3 text-center">
+                            <Spinner animation="border" size="sm" />
+                          </div>
+                        ) : !this.state.schedulerRosterId ? (
+                          <SectionEmpty>Select a roster to see upcoming class times.</SectionEmpty>
+                        ) : this.state.rosterUpcomingSlots.length === 0 ? (
+                          <SectionEmpty>No upcoming slots found for this roster.</SectionEmpty>
+                        ) : (
+                          <div className="d-grid" style={{ gap: 10 }}>
+                            {this.state.rosterUpcomingSlots.slice(0, 8).map((slot) => {
+                              const slotKey = `${slot.taught_on}|${slot.starts_at}|${slot.ends_at}|${slot.location || ""}`;
 
-                        <Col md={2}>
-                          <Button
-                            type="submit"
-                            size="sm"
-                            className={`w-100 ${BTN_CLASS}`}
-                            style={BTN_STYLE}
-                            variant="primary"
-                            disabled={saving}
-                          >
-                            Add
-                          </Button>
-                        </Col>
-                      </Row>
+                              return (
+                                <div
+                                  key={slotKey}
+                                  className="border rounded-3 px-3 py-3 d-flex justify-content-between align-items-center"
+                                  style={{
+                                    background: "#fff",
+                                    borderColor: "#e9ecef",
+                                    gap: 12,
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0 }}>
+                                    <div className="fw-semibold" style={{ fontSize: 14 }}>
+                                      {formatDateShort(slot.taught_on)}
+                                    </div>
 
-                      <div className="mt-2 d-flex gap-2 flex-wrap">
-                        <Button
-                          size="sm"
-                          type="button"
-                          className={BTN_CLASS}
-                          style={BTN_STYLE}
-                          variant="outline-secondary"
-                          disabled={saving}
-                          onClick={() =>
-                            this.setState({
-                              newTaughtOn: "",
-                              newStartsAt: "",
-                              newEndsAt: "",
-                              newLocation: "",
-                            })
-                          }
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </Form>
+                                    <div className="text-muted mt-1" style={{ fontSize: 13 }}>
+                                      {formatTimeRange(slot.starts_at, slot.ends_at)}
+                                      {slot.location ? ` • ${slot.location}` : ""}
+                                    </div>
+
+                                    <div className="mt-2 d-flex flex-wrap gap-2">
+                                      <Badge bg="light" text="dark" className="border">
+                                        {slot.kind === "meeting" ? "One-off" : "Weekly"}
+                                      </Badge>
+                                    </div>
+                                  </div>
+
+                                  <Button
+                                    size="sm"
+                                    className={BTN_CLASS}
+                                    style={BTN_STYLE}
+                                    variant="outline-primary"
+                                    disabled={saving}
+                                    onClick={() => this.addOccurrenceFromSlot(slot)}
+                                  >
+                                    Add
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <SectionKicker>Custom date and time</SectionKicker>
+                          <div className="flex-grow-1" style={{ height: 1, background: "#e9ecef" }} />
+                        </div>
+
+                        <Form onSubmit={this.createOccurrence}>
+                          <Row className="g-2 align-items-end">
+                            <Col md={4}>
+                              <Form.Label>Date</Form.Label>
+                              <Form.Control
+                                type="date"
+                                name="newTaughtOn"
+                                value={this.state.newTaughtOn}
+                                onChange={this.handleOccFieldChange}
+                                required
+                                disabled={saving}
+                              />
+                            </Col>
+
+                            <Col md={3}>
+                              <Form.Label>Start</Form.Label>
+                              <Form.Control
+                                type="time"
+                                name="newStartsAt"
+                                value={this.state.newStartsAt}
+                                onChange={this.handleOccFieldChange}
+                                disabled={saving}
+                              />
+                            </Col>
+
+                            <Col md={3}>
+                              <Form.Label>End</Form.Label>
+                              <Form.Control
+                                type="time"
+                                name="newEndsAt"
+                                value={this.state.newEndsAt}
+                                onChange={this.handleOccFieldChange}
+                                disabled={saving}
+                              />
+                            </Col>
+
+                            <Col md={10}>
+                              <Form.Label>Location (optional)</Form.Label>
+                              <Form.Control
+                                type="text"
+                                name="newLocation"
+                                placeholder="e.g. Rink A"
+                                value={this.state.newLocation}
+                                onChange={this.handleOccFieldChange}
+                                disabled={saving}
+                              />
+                            </Col>
+
+                            <Col md={2}>
+                              <Button
+                                type="submit"
+                                size="sm"
+                                className={`w-100 ${BTN_CLASS}`}
+                                style={BTN_STYLE}
+                                variant="primary"
+                                disabled={saving}
+                              >
+                                Add
+                              </Button>
+                            </Col>
+                          </Row>
+
+                          <div className="mt-2 d-flex gap-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              type="button"
+                              className={BTN_CLASS}
+                              style={BTN_STYLE}
+                              variant="outline-secondary"
+                              disabled={saving}
+                              onClick={() =>
+                                this.setState({
+                                  newTaughtOn: "",
+                                  newStartsAt: "",
+                                  newEndsAt: "",
+                                  newLocation: "",
+                                })
+                              }
+                            >
+                              Clear
+                            </Button>
+                          </div>
+                        </Form>
+                      </>
+                    )}
                   </Card.Body>
                 </Card>
               </div>
